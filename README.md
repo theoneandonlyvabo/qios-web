@@ -1,5 +1,7 @@
 # QIOS — Panduan Developer Frontend
 
+<img src="https://skillicons.dev/icons?i=nextjs,ts,tailwind,nodejs" />
+
 Dokumen ini khusus untuk developer yang handle layer `client` (Next.js). Baca sampai habis sebelum mulai nulis kode apapun.
 
 ---
@@ -26,15 +28,11 @@ Dokumen ini khusus untuk developer yang handle layer `client` (Next.js). Baca sa
 
 QIOS dibangun dengan tiga layer utama yang punya tanggung jawab berbeda:
 
-```
-Browser (User)
-      ↓
-client/         → Next.js    — tampilan dan gateway request
-      ↓
-server/         → Go         — semua logika bisnis dan keputusan
-      ↓
-Database        → PostgreSQL — penyimpanan data permanen
-```
+| Layer | Teknologi | Tanggung Jawab |
+|---|---|---|
+| Client | <img src="https://skillicons.dev/icons?i=nextjs" height="20" /> Next.js | Tampilan dan gateway request |
+| Server | <img src="https://skillicons.dev/icons?i=go" height="20" /> Go | Logika bisnis dan keputusan |
+| Database | <img src="https://skillicons.dev/icons?i=postgres" height="20" /> PostgreSQL | Penyimpanan data permanen |
 
 **Cara kerjanya:**
 
@@ -52,11 +50,11 @@ Database        → PostgreSQL — penyimpanan data permanen
 
 Ini bukan pilihan random. Ada alasan di balik setiap teknologi yang dipilih.
 
-**Next.js** dipilih karena dia bisa handle dua hal sekaligus: frontend (UI) dan mid-end (API Routes yang jalan di server). Artinya satu framework cukup untuk semua yang berhubungan dengan layer user. Next.js juga punya fitur server-side rendering, file-based routing, dan built-in middleware yang bikin development lebih cepat dan terstruktur.
+<img src="https://skillicons.dev/icons?i=nextjs" height="20" /> **Next.js** dipilih karena dia bisa handle dua hal sekaligus: frontend (UI) dan mid-end (API Routes yang jalan di server). Artinya satu framework cukup untuk semua yang berhubungan dengan layer user. Next.js juga punya fitur server-side rendering, file-based routing, dan built-in middleware yang bikin development lebih cepat dan terstruktur.
 
-**Go** dipilih untuk backend karena performanya tinggi, concurrency-nya native, dan deployment-nya simpel. Go sangat cocok untuk service yang perlu handle banyak request secara paralel — seperti payment webhook yang bisa datang bersamaan dari banyak user. Go juga strongly-typed, jadi lebih aman dan mudah di-maintain jangka panjang.
+<img src="https://skillicons.dev/icons?i=go" height="20" /> **Go** dipilih untuk backend karena performanya tinggi, concurrency-nya native, dan deployment-nya simpel. Go sangat cocok untuk service yang perlu handle banyak request secara paralel — seperti payment webhook yang bisa datang bersamaan dari banyak user. Go juga strongly-typed, jadi lebih aman dan mudah di-maintain jangka panjang.
 
-**PostgreSQL** dipilih karena dia relational database yang mature dan stabil. Untuk aplikasi SaaS yang handle transaksi dan data user, relational database adalah pilihan paling aman karena mendukung ACID — artinya data tidak akan corrupt meskipun terjadi error di tengah proses.
+<img src="https://skillicons.dev/icons?i=postgres" height="20" /> **PostgreSQL** dipilih karena dia relational database yang mature dan stabil. Untuk aplikasi SaaS yang handle transaksi dan data user, relational database adalah pilihan paling aman karena mendukung ACID — artinya data tidak akan corrupt meskipun terjadi error di tengah proses.
 
 ---
 
@@ -77,7 +75,7 @@ Kamu tidak perlu menyentuh folder `apps/server` (Go), `migrations/`, atau konfig
 
 Pastikan semua tools berikut sudah terinstall di komputermu sebelum melanjutkan.
 
-### 1. Install Git
+### <img src="https://skillicons.dev/icons?i=git" height="20" /> 1. Install Git
 
 Git digunakan untuk clone repository dan mengelola kode.
 
@@ -91,7 +89,7 @@ git -v
 
 Output yang diharapkan: `git version 2.x.x`
 
-### 2. Install Node.js
+### <img src="https://skillicons.dev/icons?i=nodejs" height="20" /> 2. Install Node.js
 
 Node.js dibutuhkan untuk menjalankan Next.js.
 
@@ -107,7 +105,7 @@ npm -v
 
 Output yang diharapkan: node `v20.x.x` ke atas, npm `v10.x.x` ke atas
 
-### 3. Install VS Code (Direkomendasikan)
+### <img src="https://skillicons.dev/icons?i=vscode" height="20" /> 3. Install VS Code (Direkomendasikan)
 
 - Download di: https://code.visualstudio.com/
 - Setelah terbuka, install extension berikut:
