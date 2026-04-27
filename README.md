@@ -1,8 +1,5 @@
-# QIOS web
+# QIOS
 
-<img src="https://skillicons.dev/icons?i=nextjs,react,tailwind,ts,js,go,postgres,docker" />
-
-<br />
 <br />
 
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
