@@ -1,16 +1,19 @@
-# qios-web
+# QIOS
+
+<img src="https://skillicons.dev/icons?i=nextjs,go,postgres,aws" />
 
 <br />
+<br />
 
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
-[![Echo](https://img.shields.io/badge/Echo-v4-00ADD8?style=flat-square)](https://echo.labstack.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=flat-square&logo=jsonwebtokens)](https://jwt.io/)
-[![Midtrans](https://img.shields.io/badge/Payment-Midtrans-003399?style=flat-square)](https://midtrans.com/)
-[![License](https://img.shields.io/badge/License-Private-red?style=flat-square)]()
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
+[![Echo](https://img.shields.io/badge/Echo-v4-00ADD8?style=for-the-badge)](https://echo.labstack.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=for-the-badge&logo=jsonwebtokens)](https://jwt.io/)
+[![Midtrans](https://img.shields.io/badge/Payment-Midtrans-003399?style=for-the-badge)](https://midtrans.com/)
+[![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)]()
 
 <br />
 
@@ -90,10 +93,10 @@ PostgreSQL                  — penyimpanan data permanen
 > Bagian ini khusus untuk developer yang handle `apps/client` (Next.js).
 > Jika kamu adalah developer backend, loncat ke [Backend Guide](#-backend-guide).
 
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind](https://img.shields.io/badge/Tailwind-v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind](https://img.shields.io/badge/Tailwind-v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
 ---
 
@@ -237,8 +240,8 @@ API_BASE_URL=http://localhost:8080
 
 ```
 main            → production-ready, jangan push langsung ke sini
-dev             → branch aktif pengembangan
-feature/nama    → branch kerjamu
+dev             → branch aktif pengembangan, semua feature branch merge ke sini
+feature/nama    → branch kerjamu, selalu dari dev
 ```
 
 ```bash
@@ -253,17 +256,7 @@ git commit -m "feat: deskripsi singkat"
 git push origin feature/nama-fitur
 ```
 
-Buka Pull Request ke `dev` di GitHub. Jangan merge sendiri.
-
-**Format commit:**
-
-```
-feat: tambah halaman login
-fix: perbaiki redirect setelah token expired
-style: rapikan padding di header dashboard
-refactor: sederhanakan fungsi fetch
-chore: update dependencies
-```
+Buka Pull Request ke `dev` di GitHub. Jangan merge sendiri. Project lead yang review dan merge ke `main` kalau sudah siap.
 
 ---
 
@@ -297,11 +290,11 @@ chore: update dependencies
 > Bagian ini khusus untuk developer yang handle `apps/server` (Go + Echo).
 > Jika kamu adalah developer frontend, kembali ke [Frontend Guide](#-frontend-guide).
 
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
-[![Echo](https://img.shields.io/badge/Echo-v4-00ADD8?style=flat-square)](https://echo.labstack.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=flat-square&logo=jsonwebtokens)](https://jwt.io/)
-[![Midtrans](https://img.shields.io/badge/Payment-Midtrans-003399?style=flat-square)](https://midtrans.com/)
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
+[![Echo](https://img.shields.io/badge/Echo-v4-00ADD8?style=for-the-badge)](https://echo.labstack.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=for-the-badge&logo=jsonwebtokens)](https://jwt.io/)
+[![Midtrans](https://img.shields.io/badge/Payment-Midtrans-003399?style=for-the-badge)](https://midtrans.com/)
 
 ---
 
@@ -528,8 +521,8 @@ Webhook harus selalu verifikasi signature sebelum proses apapun. Jangan pernah s
 
 ```
 main            → production-ready, jangan push langsung ke sini
-dev             → branch aktif pengembangan
-feature/nama    → branch kerjamu
+dev             → branch aktif pengembangan, semua feature branch merge ke sini
+feature/nama    → branch kerjamu, selalu dari dev
 ```
 
 ```bash
@@ -544,7 +537,7 @@ git commit -m "feat: deskripsi singkat"
 git push origin feature/nama-fitur
 ```
 
-Buka Pull Request ke `dev` di GitHub. Jangan merge sendiri.
+Buka Pull Request ke `dev` di GitHub. Jangan merge sendiri. Project lead yang review dan merge ke `main` kalau sudah siap.
 
 **Format commit:**
 
