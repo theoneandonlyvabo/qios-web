@@ -2,8 +2,11 @@ openapi: 3.0.3
 
 info:
   title: QIOS API
-  description: API contract antara client (Next.js) dan server (Go + Echo) untuk platform QIOS.
-  version: 0.1.0
+  description: >
+    API contract antara client (Next.js) dan server (Go + Echo) untuk platform QIOS.
+    QIOS adalah business intelligence layer di atas sistem pembayaran Midtrans.
+    Dua role utama: owner (akses dashboard) dan operator (akses interface kasir).
+  version: 0.2.0
   contact:
     name: QIOS Development Team
 
@@ -12,16 +15,6 @@ servers:
     description: Local development
   - url: https://api.qios.id
     description: Production
-
-# ============================================================
-# SECURITY
-# ============================================================
-
-securitySchemes:
-  BearerAuth:
-    type: http
-    scheme: bearer
-    bearerFormat: JWT
 
 # ============================================================
 # PATHS
@@ -97,11 +90,10 @@ paths:
       tags: [Auth]
       summary: Login dengan Google OAuth
       description: >
-        Dipanggil oleh Next.js (via NextAuth) setelah Google 
-        OAuth berhasil. Next.js mengirim user info yang didapat
-        dari Google, Go memverifikasi apakah email terdaftar 
-        sebagai mitra, lalu issue JWT sendiri. Refresh token 
-        disimpan di httpOnly cookie.
+        Dipanggil oleh Next.js (via NextAuth) setelah Google OAuth berhasil.
+        Next.js mengirim user info yang didapat dari Google, Go memverifikasi
+        apakah email terdaftar sebagai mitra, lalu issue JWT sendiri.
+        Refresh token disimpan di httpOnly cookie.
       requestBody:
         required: true
         content:
@@ -122,7 +114,6 @@ paths:
           description: Login berhasil
           headers:
             Set-Cookie:
-              description: Refresh token disimpan di httpOnly cookie
               schema:
                 type: string
                 example: refresh_token=eyJhb...; HttpOnly; Secure; SameSite=Strict
@@ -146,10 +137,9 @@ paths:
       tags: [Auth]
       summary: Refresh access token
       description: >
-        Membaca refresh token dari httpOnly cookie,
-        memverifikasinya, dan mengembalikan access token baru.
-        Dipanggil otomatis oleh Next.js ketika access token 
-        expired.
+        Membaca refresh token dari httpOnly cookie, memverifikasinya,
+        dan mengembalikan access token baru. Dipanggil otomatis oleh
+        Next.js ketika access token expired.
       responses:
         '200':
           description: Access token baru berhasil di-issue
@@ -187,14 +177,36 @@ paths:
       tags: [Auth]
       summary: Logout
       description: >
-        Menghapus refresh token dari httpOnly cookie
-        dan menginvalidasi sesi user. Access token di 
-        sisi client harus dihapus dari memory oleh Next.js.
+        Menghapus refresh token dari httpOnly cookie dan menginvalidasi sesi user.
+        Access token di sisi client harus dihapus dari memory oleh Next.js.
       security:
         - BearerAuth: []
       responses:
         '200':
           description: Logout berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ----------------------------------------------------------
+  # USER
+  # ----------------------------------------------------------
+
+  /users/me:
+    get:
+      tags: [User]
+      summary: Ambil profil user yang sedang login
+      description: >
+        Mengembalikan data profil user beserta data bisnis yang terkait.
+        Bisa diakses oleh owner maupun operator.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profil berhasil diambil
           content:
             application/json:
               schema:
@@ -204,9 +216,7 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: string
-                    nullable: true
-                    example: null
+                    $ref: '#/components/schemas/UserWithBusiness'
                   error:
                     type: string
                     nullable: true
@@ -214,13 +224,974 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+    patch:
+      tags: [User]
+      summary: Update profil user
+      description: >
+        Mengupdate data profil user yang sedang login.
+        Hanya bisa dilakukan oleh owner.
+        Field yang tidak disertakan tidak akan diubah.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Budi Santoso
+                phone:
+                  type: string
+                  example: "08123456789"
+      responses:
+        '200':
+          description: Profil berhasil diupdate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserWithBusiness'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ----------------------------------------------------------
+  # BUSINESS
+  # ----------------------------------------------------------
+
+  /business:
+    get:
+      tags: [Business]
+      summary: Ambil detail bisnis milik user yang login
+      description: >
+        Mengembalikan data bisnis yang terkait dengan user yang sedang login.
+        Bisa diakses oleh owner maupun operator.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Data bisnis berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Business'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags: [Business]
+      summary: Update info bisnis
+      description: >
+        Mengupdate data bisnis milik user yang login.
+        Hanya bisa dilakukan oleh owner.
+        Field yang tidak disertakan tidak akan diubah.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Warung Makan Pak Budi
+                location:
+                  type: string
+                  example: Jakarta Selatan
+                category:
+                  type: string
+                  example: Kuliner
+      responses:
+        '200':
+          description: Data bisnis berhasil diupdate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Business'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ----------------------------------------------------------
+  # OPERATOR
+  # ----------------------------------------------------------
+
+  /business/operators:
+    get:
+      tags: [Operator]
+      summary: List semua operator bisnis
+      description: >
+        Mengembalikan daftar akun operator yang terdaftar di bisnis ini.
+        Hanya bisa diakses oleh owner.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List operator berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Operator'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Operator]
+      summary: Tambah operator baru
+      description: >
+        Membuat akun operator baru untuk bisnis ini.
+        Hanya bisa dilakukan oleh owner.
+        Operator tidak bisa login via Google, hanya email + password.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  example: Siti Kasir
+                email:
+                  type: string
+                  format: email
+                  example: kasir@warungbudi.com
+                password:
+                  type: string
+                  format: password
+                  example: kasir123
+      responses:
+        '201':
+          description: Operator berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Operator'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Email operator sudah terdaftar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                success: false
+                data: null
+                error: Email sudah terdaftar sebagai operator
+
+  /business/operators/{operator_id}:
+    delete:
+      tags: [Operator]
+      summary: Hapus operator
+      description: >
+        Menonaktifkan akun operator dari bisnis ini.
+        Hanya bisa dilakukan oleh owner.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: operator_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: opr_abc123
+      responses:
+        '200':
+          description: Operator berhasil dihapus
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # PRODUCT
+  # ----------------------------------------------------------
+
+  /products:
+    get:
+      tags: [Product]
+      summary: List semua produk bisnis
+      description: >
+        Mengembalikan daftar produk milik bisnis user yang login.
+        Bisa diakses oleh owner maupun operator.
+        Mendukung filter berdasarkan kategori dan query search.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            example: Minuman
+        - name: q
+          in: query
+          required: false
+          description: Search produk berdasarkan nama
+          schema:
+            type: string
+            example: es teh
+        - name: sort
+          in: query
+          required: false
+          description: Urutan tampil produk
+          schema:
+            type: string
+            enum: [name, popular, created_at]
+            default: popular
+      responses:
+        '200':
+          description: List produk berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Product]
+      summary: Tambah produk baru
+      description: >
+        Menambahkan produk baru ke katalog bisnis.
+        Hanya bisa dilakukan oleh owner.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, price]
+              properties:
+                name:
+                  type: string
+                  example: Es Teh Manis
+                price:
+                  type: integer
+                  description: Harga dalam satuan Rupiah
+                  example: 5000
+                category:
+                  type: string
+                  example: Minuman
+                description:
+                  type: string
+                  example: Teh manis dingin segar
+      responses:
+        '201':
+          description: Produk berhasil ditambahkan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Product'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /products/{product_id}:
+    patch:
+      tags: [Product]
+      summary: Update produk
+      description: >
+        Mengupdate data produk yang sudah ada.
+        Hanya bisa dilakukan oleh owner.
+        Field yang tidak disertakan tidak akan diubah.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: prd_abc123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Es Teh Manis
+                price:
+                  type: integer
+                  example: 6000
+                category:
+                  type: string
+                  example: Minuman
+                description:
+                  type: string
+                  example: Teh manis dingin segar
+                is_available:
+                  type: boolean
+                  description: Tandai produk tersedia atau tidak di kasir
+                  example: true
+      responses:
+        '200':
+          description: Produk berhasil diupdate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Product'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Product]
+      summary: Hapus produk
+      description: >
+        Menghapus produk dari katalog bisnis.
+        Hanya bisa dilakukan oleh owner.
+        Produk yang sudah pernah ada di transaksi akan di-soft delete
+        agar data historis tetap akurat.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: prd_abc123
+      responses:
+        '200':
+          description: Produk berhasil dihapus
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # TRANSACTION
+  # ----------------------------------------------------------
+
+  /transactions:
+    get:
+      tags: [Transaction]
+      summary: List transaksi bisnis
+      description: >
+        Mengembalikan daftar transaksi bisnis dengan filter dan pagination.
+        Hanya bisa diakses oleh owner.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2025-04-01"
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2025-04-30"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, paid, failed, expired]
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: List transaksi berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      transactions:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Transaction'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Transaction]
+      summary: Buat order baru dari interface kasir
+      description: >
+        Operator memilih produk di interface kasir, lalu endpoint ini
+        membuat order baru di sistem QIOS dan mengembalikan order_id
+        yang akan digunakan sebagai payment reference ke Midtrans.
+        Bisa dilakukan oleh owner maupun operator.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [product_id, quantity]
+                    properties:
+                      product_id:
+                        type: string
+                        example: prd_abc123
+                      quantity:
+                        type: integer
+                        example: 2
+                note:
+                  type: string
+                  description: Catatan opsional dari operator
+                  example: Tanpa gula
+      responses:
+        '201':
+          description: Order berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TransactionCreated'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Produk tidak ditemukan atau tidak tersedia
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                success: false
+                data: null
+                error: Produk prd_abc123 tidak tersedia
+
+  /transactions/{transaction_id}:
+    get:
+      tags: [Transaction]
+      summary: Detail transaksi
+      description: >
+        Mengembalikan detail lengkap satu transaksi termasuk item-item yang dibeli.
+        Hanya bisa diakses oleh owner.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: transaction_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: trx_abc123
+      responses:
+        '200':
+          description: Detail transaksi berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TransactionDetail'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # PAYMENT
+  # ----------------------------------------------------------
+
+  /payment/midtrans/connect:
+    post:
+      tags: [Payment]
+      summary: Hubungkan akun Midtrans bisnis
+      description: >
+        Menyimpan Midtrans server key milik bisnis ke sistem QIOS.
+        Server key dienkripsi sebelum disimpan.
+        Hanya bisa dilakukan oleh owner.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [server_key]
+              properties:
+                server_key:
+                  type: string
+                  example: SB-Mid-server-xxxx
+      responses:
+        '200':
+          description: Midtrans berhasil dihubungkan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                        example: true
+                      masked_key:
+                        type: string
+                        description: Server key yang di-mask untuk konfirmasi
+                        example: SB-Mid-server-xxxx...abcd
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Server key tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                success: false
+                data: null
+                error: Server key Midtrans tidak valid
+
+  /payment/midtrans/status:
+    get:
+      tags: [Payment]
+      summary: Cek status koneksi Midtrans
+      description: >
+        Mengecek apakah bisnis sudah terhubung ke Midtrans.
+        Bisa diakses oleh owner maupun operator.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Status koneksi berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                        example: true
+                      masked_key:
+                        type: string
+                        nullable: true
+                        example: SB-Mid-server-xxxx...abcd
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /payment/midtrans/webhook:
+    post:
+      tags: [Payment]
+      summary: Webhook notifikasi dari Midtrans
+      description: >
+        Endpoint yang dipanggil oleh Midtrans setiap kali ada perubahan
+        status transaksi. QIOS mengupdate status transaksi berdasarkan
+        notifikasi ini dan mencocokkan dengan order_id yang sudah ada.
+        Endpoint ini tidak memerlukan Bearer token, tapi diverifikasi
+        menggunakan signature key dari Midtrans.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MidtransWebhookPayload'
+      responses:
+        '200':
+          description: Webhook berhasil diproses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleSuccess'
+        '400':
+          description: Payload tidak valid atau signature tidak cocok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ----------------------------------------------------------
+  # DASHBOARD
+  # ----------------------------------------------------------
+
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Ringkasan performa bisnis
+      description: >
+        Mengembalikan data agregat untuk dashboard owner:
+        total revenue, jumlah transaksi, rata-rata nilai transaksi,
+        dan perbandingan dengan periode sebelumnya.
+        Hanya bisa diakses oleh owner.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: false
+          description: Periode yang ditampilkan
+          schema:
+            type: string
+            enum: [today, this_week, this_month, last_month]
+            default: this_month
+      responses:
+        '200':
+          description: Data summary berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/DashboardSummary'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /dashboard/transactions/trend:
+    get:
+      tags: [Dashboard]
+      summary: Tren transaksi harian
+      description: >
+        Mengembalikan data tren jumlah dan nilai transaksi per hari
+        dalam rentang waktu tertentu. Digunakan untuk chart pada dashboard.
+        Hanya bisa diakses oleh owner.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2025-04-01"
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2025-04-30"
+      responses:
+        '200':
+          description: Data tren berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DailyTrend'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /dashboard/products/top:
+    get:
+      tags: [Dashboard]
+      summary: Produk terlaris
+      description: >
+        Mengembalikan daftar produk yang paling banyak terjual
+        dalam periode tertentu, diurutkan berdasarkan jumlah terjual.
+        Hanya bisa diakses oleh owner.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [today, this_week, this_month, last_month]
+            default: this_month
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        '200':
+          description: Data produk terlaris berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TopProduct'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /dashboard/transactions/peak-hours:
+    get:
+      tags: [Dashboard]
+      summary: Peak hours transaksi
+      description: >
+        Mengembalikan distribusi jumlah transaksi per jam dalam sehari
+        berdasarkan data historis. Digunakan untuk mengetahui jam-jam
+        tersibuk bisnis. Hanya bisa diakses oleh owner.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [this_week, this_month, last_month]
+            default: this_month
+      responses:
+        '200':
+          description: Data peak hours berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HourlyDistribution'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 # ============================================================
 # COMPONENTS
 # ============================================================
 
 components:
 
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
+
+    # --- Auth ---
 
     AuthSuccess:
       type: object
@@ -241,18 +1212,53 @@ components:
           nullable: true
           example: null
 
+    # --- User ---
+
     UserWithBusiness:
       type: object
       properties:
         id:
           type: string
           example: usr_abc123
+        name:
+          type: string
+          example: Budi Santoso
         email:
           type: string
           format: email
           example: owner@email.com
+        phone:
+          type: string
+          nullable: true
+          example: "08123456789"
+        role:
+          type: string
+          enum: [owner, operator]
+          example: owner
         business:
           $ref: '#/components/schemas/Business'
+
+    # --- Operator ---
+
+    Operator:
+      type: object
+      properties:
+        id:
+          type: string
+          example: opr_abc123
+        name:
+          type: string
+          example: Siti Kasir
+        email:
+          type: string
+          format: email
+          example: kasir@warungbudi.com
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-04-01T08:00:00Z"
+
+    # --- Business ---
 
     Business:
       type: object
@@ -266,6 +1272,275 @@ components:
         location:
           type: string
           example: Jakarta Selatan
+        category:
+          type: string
+          nullable: true
+          example: Kuliner
+        midtrans_connected:
+          type: boolean
+          description: Apakah bisnis sudah terhubung ke Midtrans
+          example: true
+
+    # --- Product ---
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          example: prd_abc123
+        name:
+          type: string
+          example: Es Teh Manis
+        price:
+          type: integer
+          description: Harga dalam satuan Rupiah
+          example: 5000
+        category:
+          type: string
+          nullable: true
+          example: Minuman
+        description:
+          type: string
+          nullable: true
+          example: Teh manis dingin segar
+        is_available:
+          type: boolean
+          example: true
+        total_sold:
+          type: integer
+          description: Total unit terjual, digunakan untuk sorting popular
+          example: 142
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-04-01T08:00:00Z"
+
+    # --- Transaction ---
+
+    TransactionCreated:
+      type: object
+      description: Response saat order baru dibuat, sebelum pembayaran
+      properties:
+        id:
+          type: string
+          example: trx_abc123
+        order_id:
+          type: string
+          description: ID unik yang dikirim ke Midtrans sebagai payment reference
+          example: QIOS-20250429-abc123
+        total_amount:
+          type: integer
+          description: Total tagihan dalam Rupiah
+          example: 25000
+        status:
+          type: string
+          enum: [pending]
+          example: pending
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionItem'
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-04-29T10:30:00Z"
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          example: trx_abc123
+        order_id:
+          type: string
+          example: QIOS-20250429-abc123
+        total_amount:
+          type: integer
+          example: 25000
+        status:
+          type: string
+          enum: [pending, paid, failed, expired]
+          example: paid
+        operator_id:
+          type: string
+          nullable: true
+          description: ID operator yang membuat order, null jika dibuat oleh owner
+          example: opr_abc123
+        note:
+          type: string
+          nullable: true
+          example: Tanpa gula
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-04-29T10:32:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-04-29T10:30:00Z"
+
+    TransactionDetail:
+      allOf:
+        - $ref: '#/components/schemas/Transaction'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/TransactionItem'
+
+    TransactionItem:
+      type: object
+      properties:
+        product_id:
+          type: string
+          example: prd_abc123
+        product_name:
+          type: string
+          description: Nama produk saat transaksi terjadi (snapshot)
+          example: Es Teh Manis
+        unit_price:
+          type: integer
+          description: Harga satuan saat transaksi terjadi (snapshot)
+          example: 5000
+        quantity:
+          type: integer
+          example: 2
+        subtotal:
+          type: integer
+          example: 10000
+
+    # --- Payment ---
+
+    MidtransWebhookPayload:
+      type: object
+      description: Payload notifikasi dari Midtrans
+      properties:
+        transaction_id:
+          type: string
+          example: mid_trx_abc123
+        order_id:
+          type: string
+          description: Cocokkan dengan order_id di sistem QIOS
+          example: QIOS-20250429-abc123
+        transaction_status:
+          type: string
+          enum: [capture, settlement, pending, deny, cancel, expire, refund]
+          example: settlement
+        payment_type:
+          type: string
+          example: qris
+        gross_amount:
+          type: string
+          example: "25000.00"
+        signature_key:
+          type: string
+          description: Signature untuk verifikasi keaslian notifikasi
+          example: abc123def456...
+        transaction_time:
+          type: string
+          format: date-time
+          example: "2025-04-29T10:32:00Z"
+
+    # --- Dashboard ---
+
+    DashboardSummary:
+      type: object
+      properties:
+        period:
+          type: string
+          example: this_month
+        total_revenue:
+          type: integer
+          description: Total revenue dalam Rupiah
+          example: 15750000
+        total_transactions:
+          type: integer
+          example: 312
+        avg_transaction_value:
+          type: integer
+          description: Rata-rata nilai transaksi dalam Rupiah
+          example: 50480
+        revenue_change_pct:
+          type: number
+          format: float
+          description: Perubahan revenue dibanding periode sebelumnya dalam persen
+          example: 12.5
+        transaction_change_pct:
+          type: number
+          format: float
+          description: Perubahan jumlah transaksi dibanding periode sebelumnya dalam persen
+          example: 8.3
+
+    DailyTrend:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2025-04-29"
+        total_transactions:
+          type: integer
+          example: 24
+        total_revenue:
+          type: integer
+          example: 480000
+
+    TopProduct:
+      type: object
+      properties:
+        product_id:
+          type: string
+          example: prd_abc123
+        product_name:
+          type: string
+          example: Es Teh Manis
+        total_sold:
+          type: integer
+          example: 142
+        total_revenue:
+          type: integer
+          example: 710000
+        category:
+          type: string
+          nullable: true
+          example: Minuman
+
+    HourlyDistribution:
+      type: object
+      properties:
+        hour:
+          type: integer
+          description: Jam dalam format 0-23
+          example: 12
+        total_transactions:
+          type: integer
+          example: 45
+        avg_transactions:
+          type: number
+          format: float
+          description: Rata-rata transaksi per hari pada jam tersebut
+          example: 6.4
+
+    # --- Shared ---
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total_items:
+          type: integer
+          example: 312
+        total_pages:
+          type: integer
+          example: 16
 
     Error:
       type: object
@@ -281,6 +1556,21 @@ components:
           type: string
           example: Pesan error
 
+    SimpleSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: string
+          nullable: true
+          example: null
+        error:
+          type: string
+          nullable: true
+          example: null
+
   responses:
     Unauthorized:
       description: Access token tidak valid atau tidak ada
@@ -292,3 +1582,25 @@ components:
             success: false
             data: null
             error: Unauthorized
+
+    Forbidden:
+      description: Role tidak memiliki akses ke resource ini
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            data: null
+            error: Akses ditolak
+
+    NotFound:
+      description: Resource tidak ditemukan
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            data: null
+            error: Data tidak ditemukan
