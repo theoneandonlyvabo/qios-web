@@ -1,4 +1,4 @@
-# qios-web by skalar
+# qios-web by skalar solutions
 
 <br />
 
