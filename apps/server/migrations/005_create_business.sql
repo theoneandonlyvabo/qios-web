@@ -1,4 +1,4 @@
--- 004_create_businesses.sql
+-- 005_create_businesses.sql
 -- Satu bisnis per user (1:1). Dibuat saat owner selesai onboarding.
 
 CREATE TABLE IF NOT EXISTS businesses (
