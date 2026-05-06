@@ -1,7 +1,7 @@
 // domain/auth/routes.go
 //
-// Register semua route auth ke Echo instance.
-// Handler belum diimplementasi — skeleton untuk memastikan server bisa compile.
+// Routing untuk domain auth.
+// Semua endpoint auth tidak memerlukan middleware JWT (public).
 
 package auth
 
@@ -14,9 +14,16 @@ import (
 )
 
 func RegisterRoutes(e *echo.Echo, db *sql.DB, cfg *config.Config, jwtSvc *jwt.Service) {
-	g := e.Group("/auth")
-	g.POST("/login", login(db, cfg, jwtSvc))
-	g.POST("/google", googleLogin(db, cfg, jwtSvc))
-	g.POST("/refresh", refresh(db, jwtSvc))
-	g.POST("/logout", logout(db))
+	auth := e.Group("/auth")
+
+	// Owner
+	auth.POST("/login", login(db, cfg, jwtSvc))
+	auth.POST("/refresh", refresh(db, jwtSvc))
+	auth.POST("/logout", logout(db))
+
+	// Google OAuth — post-MVP
+	auth.POST("/google/login", googleLogin(db, cfg, jwtSvc))
+
+	// Operator (kasir)
+	auth.POST("/operator/login", operatorLogin(db, cfg, jwtSvc))
 }
