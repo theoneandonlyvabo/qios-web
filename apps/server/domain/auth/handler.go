@@ -23,8 +23,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// generateRefreshToken membuat token acak 32 byte dan mengembalikan
-// token plaintext (untuk dikirim ke client) serta hash-nya (untuk disimpan di DB).
 func generateRefreshToken() (plain string, hashed string, err error) {
 	b := make([]byte, 32)
 	if _, err = rand.Read(b); err != nil {
@@ -41,7 +39,6 @@ func hashToken(plain string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// storeRefreshToken menyimpan hash refresh token ke DB.
 func storeRefreshToken(db *sql.DB, userID, tokenHash string, expiry time.Duration) error {
 	_, err := db.Exec(
 		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
@@ -51,15 +48,10 @@ func storeRefreshToken(db *sql.DB, userID, tokenHash string, expiry time.Duratio
 	return err
 }
 
-// deleteRefreshToken menghapus refresh token berdasarkan hash.
 func deleteRefreshToken(db *sql.DB, tokenHash string) error {
 	_, err := db.Exec(`DELETE FROM refresh_tokens WHERE token_hash = $1`, tokenHash)
 	return err
 }
-
-// ----------------------------------------------------------------
-// Request / Response types
-// ----------------------------------------------------------------
 
 type loginRequest struct {
 	Email    string `json:"email"    validate:"required,email"`
@@ -71,11 +63,6 @@ type authResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-// ----------------------------------------------------------------
-// Handlers
-// ----------------------------------------------------------------
-
-// login — owner (users table).
 // POST /auth/login
 func login(db *sql.DB, cfg *config.Config, jwtSvc *jwt.Service) echo.HandlerFunc {
 	return func(c echo.Context) error {
@@ -87,7 +74,6 @@ func login(db *sql.DB, cfg *config.Config, jwtSvc *jwt.Service) echo.HandlerFunc
 			return response.BadRequest(c, err.Error())
 		}
 
-		// Ambil user + business dalam satu query.
 		var (
 			userID       string
 			passwordHash string
@@ -104,23 +90,22 @@ func login(db *sql.DB, cfg *config.Config, jwtSvc *jwt.Service) echo.HandlerFunc
 		).Scan(&userID, &passwordHash, &businessID, &isActive, &isSuspended)
 
 		if errors.Is(err, sql.ErrNoRows) {
-			return response.Unauthorized(c, "invalid credentials")
+			return response.UnauthorizedMsg(c, "invalid credentials")
 		}
 		if err != nil {
 			return response.InternalError(c, "database error")
 		}
 
 		if !isActive || isSuspended {
-			return response.Forbidden(c, "account is inactive or suspended")
+			return response.ForbiddenMsg(c, "account is inactive or suspended")
 		}
 
-		// User Google OAuth tidak punya password_hash.
 		if passwordHash == "" {
 			return response.BadRequest(c, "this account uses Google login")
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
-			return response.Unauthorized(c, "invalid credentials")
+			return response.UnauthorizedMsg(c, "invalid credentials")
 		}
 
 		accessToken, err := jwtSvc.IssueAccessToken(userID, businessID, "owner")
@@ -144,7 +129,6 @@ func login(db *sql.DB, cfg *config.Config, jwtSvc *jwt.Service) echo.HandlerFunc
 	}
 }
 
-// operatorLogin — kasir (operators table).
 // POST /auth/operator/login
 func operatorLogin(db *sql.DB, cfg *config.Config, jwtSvc *jwt.Service) echo.HandlerFunc {
 	return func(c echo.Context) error {
@@ -170,18 +154,18 @@ func operatorLogin(db *sql.DB, cfg *config.Config, jwtSvc *jwt.Service) echo.Han
 		).Scan(&operatorID, &businessID, &passwordHash, &isActive)
 
 		if errors.Is(err, sql.ErrNoRows) {
-			return response.Unauthorized(c, "invalid credentials")
+			return response.UnauthorizedMsg(c, "invalid credentials")
 		}
 		if err != nil {
 			return response.InternalError(c, "database error")
 		}
 
 		if !isActive {
-			return response.Forbidden(c, "operator account is inactive")
+			return response.ForbiddenMsg(c, "operator account is inactive")
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
-			return response.Unauthorized(c, "invalid credentials")
+			return response.UnauthorizedMsg(c, "invalid credentials")
 		}
 
 		accessToken, err := jwtSvc.IssueAccessToken(operatorID, businessID, "operator")
@@ -205,18 +189,14 @@ func operatorLogin(db *sql.DB, cfg *config.Config, jwtSvc *jwt.Service) echo.Han
 	}
 }
 
-// googleLogin — owner via Google OAuth.
 // POST /auth/google/login
-// TODO: implement post-MVP. Butuh Google OAuth client ID + secret dari config.
 func googleLogin(db *sql.DB, cfg *config.Config, jwtSvc *jwt.Service) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		return response.NotImplemented(c, "Google login not yet implemented")
 	}
 }
 
-// refresh — rotate refresh token.
 // POST /auth/refresh
-// Body: { "refresh_token": "..." }
 func refresh(db *sql.DB, jwtSvc *jwt.Service) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var req struct {
@@ -231,7 +211,6 @@ func refresh(db *sql.DB, jwtSvc *jwt.Service) echo.HandlerFunc {
 
 		tokenHash := hashToken(req.RefreshToken)
 
-		// Cari token di DB, ambil user_id sekaligus.
 		var (
 			userID    string
 			expiresAt time.Time
@@ -242,19 +221,17 @@ func refresh(db *sql.DB, jwtSvc *jwt.Service) echo.HandlerFunc {
 		).Scan(&userID, &expiresAt)
 
 		if errors.Is(err, sql.ErrNoRows) {
-			return response.Unauthorized(c, "invalid refresh token")
+			return response.UnauthorizedMsg(c, "invalid refresh token")
 		}
 		if err != nil {
 			return response.InternalError(c, "database error")
 		}
 
 		if time.Now().After(expiresAt) {
-			// Hapus token expired dari DB.
 			_ = deleteRefreshToken(db, tokenHash)
-			return response.Unauthorized(c, "refresh token expired")
+			return response.UnauthorizedMsg(c, "refresh token expired")
 		}
 
-		// Cari business_id dan role. Cek users dulu, kalau tidak ada cek operators.
 		var businessID, role string
 
 		err = db.QueryRow(
@@ -266,13 +243,12 @@ func refresh(db *sql.DB, jwtSvc *jwt.Service) echo.HandlerFunc {
 		if err == nil {
 			role = "owner"
 		} else {
-			// Coba operators.
 			err = db.QueryRow(
 				`SELECT business_id FROM operators WHERE id = $1`,
 				userID,
 			).Scan(&businessID)
 			if errors.Is(err, sql.ErrNoRows) {
-				return response.Unauthorized(c, "user not found")
+				return response.UnauthorizedMsg(c, "user not found")
 			}
 			if err != nil {
 				return response.InternalError(c, "database error")
@@ -280,7 +256,6 @@ func refresh(db *sql.DB, jwtSvc *jwt.Service) echo.HandlerFunc {
 			role = "operator"
 		}
 
-		// Hapus token lama, simpan token baru (rotate).
 		if err := deleteRefreshToken(db, tokenHash); err != nil {
 			return response.InternalError(c, "failed to rotate token")
 		}
@@ -306,9 +281,7 @@ func refresh(db *sql.DB, jwtSvc *jwt.Service) echo.HandlerFunc {
 	}
 }
 
-// logout — hapus refresh token dari DB.
 // POST /auth/logout
-// Body: { "refresh_token": "..." }
 func logout(db *sql.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var req struct {

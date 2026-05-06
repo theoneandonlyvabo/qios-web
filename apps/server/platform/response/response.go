@@ -5,6 +5,10 @@
 //
 // Shape standar:
 //   { "success": true/false, "data": ..., "error": "..." }
+//
+// Konvensi penamaan:
+//   - Fungsi tanpa suffix  → response generik, pesan error sudah ditentukan.
+//   - Fungsi dengan suffix "Msg" → response dengan custom error message dari handler.
 
 package response
 
@@ -20,6 +24,10 @@ type body struct {
 	Error   string `json:"error,omitempty"`
 }
 
+// ----------------------------------------------------------------
+// 2xx
+// ----------------------------------------------------------------
+
 // OK mengembalikan 200 dengan data.
 func OK(c echo.Context, data any) error {
 	return c.JSON(http.StatusOK, body{Success: true, Data: data})
@@ -34,6 +42,10 @@ func Created(c echo.Context, data any) error {
 func NoContent(c echo.Context) error {
 	return c.JSON(http.StatusOK, body{Success: true})
 }
+
+// ----------------------------------------------------------------
+// 4xx — generik (pesan default)
+// ----------------------------------------------------------------
 
 // BadRequest mengembalikan 400 dengan pesan error.
 func BadRequest(c echo.Context, message string) error {
@@ -65,7 +77,41 @@ func UnprocessableEntity(c echo.Context, message string) error {
 	return c.JSON(http.StatusUnprocessableEntity, body{Success: false, Error: message})
 }
 
+// ----------------------------------------------------------------
+// 4xx — Msg variant (custom message dari handler)
+// ----------------------------------------------------------------
+
+// UnauthorizedMsg mengembalikan 401 dengan pesan custom.
+func UnauthorizedMsg(c echo.Context, message string) error {
+	return c.JSON(http.StatusUnauthorized, body{Success: false, Error: message})
+}
+
+// ForbiddenMsg mengembalikan 403 dengan pesan custom.
+func ForbiddenMsg(c echo.Context, message string) error {
+	return c.JSON(http.StatusForbidden, body{Success: false, Error: message})
+}
+
+// NotFoundMsg mengembalikan 404 dengan pesan custom.
+func NotFoundMsg(c echo.Context, message string) error {
+	return c.JSON(http.StatusNotFound, body{Success: false, Error: message})
+}
+
+// NotImplemented mengembalikan 501 dengan pesan custom.
+func NotImplemented(c echo.Context, message string) error {
+	return c.JSON(http.StatusNotImplemented, body{Success: false, Error: message})
+}
+
+// ----------------------------------------------------------------
+// 5xx
+// ----------------------------------------------------------------
+
 // Internal mengembalikan 500. Pesan error internal tidak diekspos ke client.
 func Internal(c echo.Context) error {
 	return c.JSON(http.StatusInternalServerError, body{Success: false, Error: "Terjadi kesalahan pada server"})
+}
+
+// InternalError mengembalikan 500 dengan pesan custom.
+// Gunakan hanya untuk debugging atau logging — jangan ekspos detail teknis ke production client.
+func InternalError(c echo.Context, message string) error {
+	return c.JSON(http.StatusInternalServerError, body{Success: false, Error: message})
 }
