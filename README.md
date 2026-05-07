@@ -76,7 +76,7 @@ PostgreSQL                  — penyimpanan data permanen
 │   ├── client/                 → Next.js (frontend + mid-end)
 │   └── server/                 → Go + Echo (backend)
 ├── docs/
-│   └── api.yaml                → OpenAPI spec, kontrak FE dan BE
+│   └── qios-api.yaml                → OpenAPI spec, kontrak FE dan BE
 ├── docker-compose.yml
 └── .env.example
 ```

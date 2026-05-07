@@ -20,8 +20,8 @@ import (
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/config"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/auth"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/order"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/payment"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/transaction"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/user"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/database"
 	appjwt "github.com/theoneandonlyvabo/qios-web/apps/server/platform/jwt"
@@ -66,7 +66,7 @@ func main() {
 
 	auth.RegisterRoutes(e, db, cfg, jwtSvc)
 	user.RegisterRoutes(e, db, authMiddleware)
-	order.RegisterRoutes(e, db, authMiddleware)
+	transaction.RegisterRoutes(e, db, authMiddleware)
 	payment.RegisterRoutes(e, db, cfg, authMiddleware)
 
 	// 7. Start server

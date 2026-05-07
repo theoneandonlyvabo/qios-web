@@ -143,7 +143,7 @@ Migration bersifat **append-only** — file yang sudah ada tidak boleh diedit. P
 
 ## API Contract
 
-Kontrak lengkap ada di `docs/api.yaml` (OpenAPI 3.0.3).
+Kontrak lengkap ada di `docs/qios-api.yaml` (OpenAPI 3.0.3).
 
 **Aturan:**
 
@@ -179,7 +179,7 @@ Kontrak lengkap ada di `docs/api.yaml` (OpenAPI 3.0.3).
 | Transactions | `PUT /transactions/:id` | Edit transaksi |
 | Transactions | `DELETE /transactions/:id` | Hapus transaksi (dengan audit trail) |
 
-Setiap perubahan endpoint **harus diupdate di `docs/api.yaml` terlebih dahulu** sebelum implementasi.
+Setiap perubahan endpoint **harus diupdate di `docs/qios-api.yaml` terlebih dahulu** sebelum implementasi.
 
 ---
 
@@ -583,7 +583,7 @@ feat: tambah invoice domain dengan Midtrans integration
 fix: perbaiki race condition di webhook handler
 fix: validasi signature key Midtrans di webhook endpoint
 chore: update go dependencies
-docs: update api.yaml dengan domain payment dan invoice
+docs: update qios-api.yaml dengan domain payment dan invoice
 refactor: pisahkan auth service dari handler
 ```
 
@@ -645,7 +645,7 @@ refactor: pisahkan auth service dari handler
 
 ## Dokumen Terkait
 
-- `docs/api.yaml` — OpenAPI 3.0.3 contract lengkap
+- `docs/qios-api.yaml` — OpenAPI 3.0.3 contract lengkap
 - `AGENTS.md` (root) — panduan umum untuk AI agents
 - `apps/server/AGENTS.md` — panduan implementasi spesifik server
 - PRD QIOS — dokumen product requirement lengkap (source of truth untuk product decisions)
