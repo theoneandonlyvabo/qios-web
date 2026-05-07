@@ -4,6 +4,7 @@
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
 
   --color-brand: #CC2200;
+  --color-brand-orange: #E65100;
   --color-brand-soft: #D93010;
   --color-brand-dim: rgba(204, 34, 0, 0.1);
 
@@ -33,32 +34,32 @@
 }
 
 :root {
-  --background: #FFFFFF;
-  --foreground: #0A0A0A;
-  --card: #FFFFFF;
-  --card-foreground: #0A0A0A;
+  --background: #FDFCFB;
+  --foreground: #1A1614;
+  --card: rgba(255, 255, 255, 0.8);
+  --card-foreground: #1A1614;
   --popover: #FFFFFF;
-  --popover-foreground: #0A0A0A;
+  --popover-foreground: #1A1614;
   --primary: #CC2200;
   --primary-foreground: #FFFFFF;
-  --secondary: #F4F4F5;
-  --secondary-foreground: #18181B;
-  --muted: #F4F4F5;
-  --muted-foreground: #71717A;
-  --accent: #F4F4F5;
-  --accent-foreground: #18181B;
+  --secondary: #F7F4F2;
+  --secondary-foreground: #4A4440;
+  --muted: #F7F4F2;
+  --muted-foreground: #7D746D;
+  --accent: #FDFCFB;
+  --accent-foreground: #1A1614;
   --destructive: #EF4444;
   --destructive-foreground: #FAFAFA;
-  --border: #E4E4E7;
-  --input: #E4E4E7;
+  --border: #EBE5E0;
+  --input: #EBE5E0;
   --ring: #CC2200;
-  --radius: 0.75rem;
+  --radius: 1rem;
 }
 
 [data-theme='dark'] {
   --background: #0E0C0B;
   --foreground: #F2EDE9;
-  --card: #141110;
+  --card: rgba(20, 17, 16, 0.7);
   --card-foreground: #F2EDE9;
   --popover: #141110;
   --popover-foreground: #F2EDE9;
@@ -88,7 +89,7 @@
 }
 
 .glass {
-  @apply bg-background/60 backdrop-blur-xl border border-border;
+  @apply backdrop-blur-xl border border-border;
 }
 
 .premium-shadow {
@@ -97,4 +98,9 @@
 
 [data-theme='dark'] .premium-shadow {
   box-shadow: 0 0 0 1px rgba(255,255,255,.05),0 2px 4px rgba(0,0,0,.3),0 12px 24px rgba(0,0,0,.4);
+}
+
+.bg-dot-grid {
+  background-image: radial-gradient(circle, var(--color-brand-dim) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
