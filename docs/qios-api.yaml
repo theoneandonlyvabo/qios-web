@@ -351,14 +351,20 @@ paths:
   # ----------------------------------------------------------
   # OPERATOR
   # ----------------------------------------------------------
+  #
+  # Owner mengelola operator dari /business/operators.
+  # Operator (kasir) login dari /kasir/auth/login atau /kasir/auth/login/qr.
+  # Login operator menggunakan operator_code (per-business) atau qr_token (global).
 
   /business/operators:
     get:
       tags: [Operator]
       summary: List semua operator bisnis
       description: >
-        Mengembalikan daftar akun operator yang terdaftar di bisnis ini.
+        Mengembalikan daftar akun operator yang terdaftar di bisnis ini
+        beserta info kuota slot dari plan aktif.
         Hanya bisa diakses oleh owner.
+        qr_token tidak dikembalikan di endpoint list — hanya saat create dan regenerate.
       security:
         - BearerAuth: []
       responses:
@@ -369,17 +375,24 @@ paths:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
+                  success: { type: boolean, example: true }
                   data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Operator'
+                    type: object
+                    properties:
+                      operators:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Operator'
+                      slot_used:
+                        type: integer
+                        example: 2
+                      slot_max:
+                        type: integer
+                        description: -1 berarti unlimited
+                        example: 3
                   error:
                     type: string
                     nullable: true
-                    example: null
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -390,8 +403,10 @@ paths:
       summary: Tambah operator baru
       description: >
         Membuat akun operator baru untuk bisnis ini.
-        Hanya bisa dilakukan oleh owner.
-        Operator tidak bisa login via Google, hanya email + password.
+        Sistem akan generate qr_token random — disertakan sekali pada response
+        ini sebagai bahan untuk QR code, dan tidak akan muncul lagi di endpoint list.
+        Cap slot operator divalidasi terhadap max_operators dari plan aktif
+        (fallback 3, -1 berarti unlimited).
       security:
         - BearerAuth: []
       requestBody:
@@ -400,15 +415,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, email, password]
+              required: [name, operator_code, password]
               properties:
                 name:
                   type: string
                   example: Siti Kasir
-                email:
+                operator_code:
                   type: string
-                  format: email
-                  example: kasir@warungbudi.com
+                  description: ID login human-readable, unik per-bisnis. 3-64 karakter alfanumerik / dash / underscore.
+                  example: kasir-1
                 password:
                   type: string
                   format: password
@@ -421,46 +436,134 @@ paths:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
+                  success: { type: boolean, example: true }
                   data:
-                    $ref: '#/components/schemas/Operator'
+                    $ref: '#/components/schemas/OperatorWithSecret'
                   error:
                     type: string
                     nullable: true
-                    example: null
+        '400':
+          description: Input tidak valid (operator_code format salah, password terlalu pendek, dll)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Email operator sudah terdaftar
+          description: operator_code sudah dipakai di bisnis ini, atau slot operator penuh
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                success: false
-                data: null
-                error: Email sudah terdaftar sebagai operator
+              examples:
+                code_taken:
+                  value:
+                    success: false
+                    data: null
+                    error: operator_code sudah digunakan di bisnis ini
+                limit_reached:
+                  value:
+                    success: false
+                    data: null
+                    error: Kuota operator pada plan saat ini sudah penuh
 
   /business/operators/{operator_id}:
-    delete:
+    parameters:
+      - name: operator_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
       tags: [Operator]
-      summary: Hapus operator
-      description: >
-        Menonaktifkan akun operator dari bisnis ini.
-        Hanya bisa dilakukan oleh owner.
+      summary: Detail satu operator
+      description: Mengembalikan detail operator. Tidak include qr_token.
       security:
         - BearerAuth: []
-      parameters:
-        - name: operator_id
-          in: path
-          required: true
-          schema:
-            type: string
-            example: opr_abc123
+      responses:
+        '200':
+          description: Operator ditemukan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/Operator'
+                  error:
+                    type: string
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Operator]
+      summary: Update operator
+      description: >
+        Partial update — hanya field yang dikirim yang berubah.
+        Field yang bisa diubah: name dan is_active.
+        Untuk reset password / regenerate QR pakai endpoint terpisah.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Siti Kasir Pagi
+                is_active:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Operator berhasil diupdate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/Operator'
+                  error:
+                    type: string
+                    nullable: true
+        '400':
+          description: Input tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Operator]
+      summary: Hapus operator (soft delete)
+      description: >
+        Menandai operator sebagai dihapus (soft delete).
+        Operator tidak bisa login lagi setelah dihapus, tapi data historis tetap terjaga.
+        operator_code bisa dipakai ulang setelah operator dihapus.
+      security:
+        - BearerAuth: []
       responses:
         '200':
           description: Operator berhasil dihapus
@@ -474,6 +577,157 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /business/operators/{operator_id}/regenerate-qr:
+    post:
+      tags: [Operator]
+      summary: Regenerate qr_token operator
+      description: >
+        Menerbitkan qr_token baru untuk operator. QR lama otomatis tidak valid
+        untuk login baru, tapi sesi JWT yang sudah aktif tetap berlaku sampai expiry.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: operator_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: QR token baru berhasil di-generate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/OperatorWithSecret'
+                  error:
+                    type: string
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # KASIR AUTH (operator login)
+  # ----------------------------------------------------------
+
+  /kasir/auth/login:
+    post:
+      tags: [Operator]
+      summary: Login operator dengan operator_code + password
+      description: >
+        Endpoint publik. Operator memasukkan business_id (atau slug yang diterjemahkan
+        di FE), operator_code, dan password. Mengembalikan access token JWT dengan
+        role "operator" dan claim operator_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business_id, operator_code, password]
+              properties:
+                business_id:
+                  type: string
+                  format: uuid
+                operator_code:
+                  type: string
+                  example: kasir-1
+                password:
+                  type: string
+                  format: password
+                  example: kasir123
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/OperatorLoginResponse'
+                  error:
+                    type: string
+                    nullable: true
+        '400':
+          description: Input tidak valid (business_id format, field kosong)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: operator_code atau password salah
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Akun operator dinonaktifkan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /kasir/auth/login/qr:
+    post:
+      tags: [Operator]
+      summary: Login operator dengan QR scan
+      description: >
+        Endpoint publik. Operator scan QR yang berisi qr_token statis,
+        device kirim qr_token ke endpoint ini. Mengembalikan access token JWT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qr_token]
+              properties:
+                qr_token:
+                  type: string
+                  example: 7p2lJpcG-Sx0n0XKqyYFBvOe1nXMyM-WQHrTAYYzvUI
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/OperatorLoginResponse'
+                  error:
+                    type: string
+                    nullable: true
+        '400':
+          description: qr_token kosong
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: qr_token tidak valid (sudah di-regenerate atau tidak ada)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Akun operator dinonaktifkan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   # ----------------------------------------------------------
   # PRODUCT
@@ -1280,21 +1534,57 @@ components:
 
     Operator:
       type: object
+      description: >
+        Bentuk operator yang aman dikirim ke client. Tidak include
+        password_hash maupun qr_token.
       properties:
         id:
           type: string
-          example: opr_abc123
+          format: uuid
+        business_id:
+          type: string
+          format: uuid
         name:
           type: string
           example: Siti Kasir
-        email:
+        operator_code:
           type: string
-          format: email
-          example: kasir@warungbudi.com
+          description: ID login human-readable, unik per-bisnis.
+          example: kasir-1
+        is_active:
+          type: boolean
+          example: true
         created_at:
           type: string
           format: date-time
           example: "2025-04-01T08:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-04-01T08:00:00Z"
+
+    OperatorWithSecret:
+      type: object
+      description: >
+        Bentuk operator + qr_token. Hanya dikembalikan saat create dan
+        regenerate-qr — qr_token tidak diekspos di endpoint lain.
+      allOf:
+        - $ref: '#/components/schemas/Operator'
+        - type: object
+          properties:
+            qr_token:
+              type: string
+              description: Token statis url-safe base64 untuk di-encode ke QR.
+              example: 7p2lJpcG-Sx0n0XKqyYFBvOe1nXMyM-WQHrTAYYzvUI
+
+    OperatorLoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT dengan role "operator" dan claim operator_id.
+        operator:
+          $ref: '#/components/schemas/Operator'
 
     # --- Business ---
 

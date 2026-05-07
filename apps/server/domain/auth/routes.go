@@ -24,6 +24,5 @@ func RegisterRoutes(e *echo.Echo, db *sql.DB, cfg *config.Config, jwtSvc *jwt.Se
 	// Google OAuth — post-MVP
 	auth.POST("/google/login", googleLogin(db, cfg, jwtSvc))
 
-	// Operator (kasir)
-	auth.POST("/operator/login", operatorLogin(db, cfg, jwtSvc))
+	// Operator (kasir) login dipindah ke domain/operator → /kasir/auth/login
 }

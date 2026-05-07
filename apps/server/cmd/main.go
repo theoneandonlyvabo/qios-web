@@ -20,6 +20,7 @@ import (
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/config"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/auth"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/operator"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/transaction"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/user"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/xendit"
@@ -68,6 +69,12 @@ func main() {
 	user.RegisterRoutes(e, db, authMiddleware)
 	transaction.RegisterRoutes(e, db, authMiddleware)
 	xendit.RegisterRoutes(e, db, cfg, authMiddleware)
+
+	// Operator domain — owner CRUD + kasir login.
+	operatorRepo := operator.NewPostgresRepository(db)
+	operatorPlan := operator.NewPostgresPlanLookup(db)
+	operatorSvc := operator.NewService(operatorRepo, operatorPlan, jwtSvc)
+	operator.RegisterRoutes(e, operator.NewHandler(operatorSvc), authMiddleware)
 
 	// 7. Start server
 	log.Printf("server starting on port %s", cfg.AppPort)

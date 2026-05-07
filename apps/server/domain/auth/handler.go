@@ -152,65 +152,9 @@ func login(db *sql.DB, _ *config.Config, jwtSvc *jwt.Service) echo.HandlerFunc {
 	}
 }
 
-// operatorLogin — kasir (operators table).
-// POST /auth/operator/login
-func operatorLogin(db *sql.DB, _ *config.Config, jwtSvc *jwt.Service) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var req loginRequest
-		if err := c.Bind(&req); err != nil {
-			return response.BadRequest(c, "invalid request body")
-		}
-		if err := c.Validate(&req); err != nil {
-			return response.BadRequest(c, err.Error())
-		}
-
-		var (
-			operatorID   string
-			businessID   string
-			passwordHash string
-			isActive     bool
-		)
-		err := db.QueryRow(
-			`SELECT id, business_id, password_hash, is_active
-			 FROM operators
-			 WHERE email = $1`,
-			req.Email,
-		).Scan(&operatorID, &businessID, &passwordHash, &isActive)
-
-		if errors.Is(err, sql.ErrNoRows) {
-			return response.Unauthorized(c)
-		}
-		if err != nil {
-			return response.Internal(c)
-		}
-
-		if !isActive {
-			return response.ForbiddenMsg(c, "operator account is inactive")
-		}
-
-		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
-			return response.Unauthorized(c)
-		}
-
-		accessToken, err := jwtSvc.IssueAccessToken(operatorID, businessID, "operator")
-		if err != nil {
-			return response.Internal(c)
-		}
-
-		plain, hashed, err := generateRefreshToken()
-		if err != nil {
-			return response.Internal(c)
-		}
-
-		if err := storeRefreshToken(db, operatorID, hashed, jwtSvc.RefreshExpiry()); err != nil {
-			return response.Internal(c)
-		}
-
-		setRefreshCookie(c, plain, jwtSvc.RefreshExpiry())
-
-		return response.OK(c, map[string]string{"access_token": accessToken})
-	}
-}
+// Operator login dipindah ke domain/operator (POST /kasir/auth/login dan
+// POST /kasir/auth/login/qr). Field email di tabel operators sudah diganti
+// dengan operator_code di migrasi 013.
 
 // googleLogin — owner via Google OAuth.
 // POST /auth/google
@@ -284,7 +228,12 @@ func refresh(db *sql.DB, jwtSvc *jwt.Service) echo.HandlerFunc {
 			return response.Internal(c)
 		}
 
-		newAccessToken, err := jwtSvc.IssueAccessToken(userID, businessID, role)
+		var newAccessToken string
+		if role == "operator" {
+			newAccessToken, err = jwtSvc.IssueOperatorAccessToken(userID, businessID)
+		} else {
+			newAccessToken, err = jwtSvc.IssueAccessToken(userID, businessID, role)
+		}
 		if err != nil {
 			return response.Internal(c)
 		}

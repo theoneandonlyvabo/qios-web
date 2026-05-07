@@ -8,6 +8,7 @@
 //
 // Claims yang diinject ke context:
 //   "user_id"      string
+//   "operator_id"  string  (kosong kalau role != "operator")
 //   "business_id"  string
 //   "role"         string  ("owner" | "operator")
 
@@ -37,6 +38,7 @@ func RequireAuth(jwtSvc *jwt.Service) echo.MiddlewareFunc {
 			}
 
 			c.Set("user_id", claims.UserID)
+			c.Set("operator_id", claims.OperatorID)
 			c.Set("business_id", claims.BusinessID)
 			c.Set("role", claims.Role)
 
