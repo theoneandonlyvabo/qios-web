@@ -1,7 +1,7 @@
-// domain/payment/handler.go
+// domain/xendit/handler.go
 // TODO: implement semua handler
 
-package payment
+package xendit
 
 import (
 	"database/sql"

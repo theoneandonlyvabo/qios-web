@@ -1,6 +1,6 @@
-// domain/payment/routes.go
+// domain/xendit/routes.go
 
-package payment
+package xendit
 
 import (
 	"database/sql"

@@ -20,9 +20,9 @@ import (
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/config"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/auth"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/payment"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/transaction"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/user"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/xendit"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/database"
 	appjwt "github.com/theoneandonlyvabo/qios-web/apps/server/platform/jwt"
 	appmiddleware "github.com/theoneandonlyvabo/qios-web/apps/server/platform/middleware"
@@ -67,7 +67,7 @@ func main() {
 	auth.RegisterRoutes(e, db, cfg, jwtSvc)
 	user.RegisterRoutes(e, db, authMiddleware)
 	transaction.RegisterRoutes(e, db, authMiddleware)
-	payment.RegisterRoutes(e, db, cfg, authMiddleware)
+	xendit.RegisterRoutes(e, db, cfg, authMiddleware)
 
 	// 7. Start server
 	log.Printf("server starting on port %s", cfg.AppPort)
