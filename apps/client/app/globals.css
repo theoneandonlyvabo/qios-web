@@ -56,7 +56,7 @@
   --radius: 1rem;
 }
 
-[data-theme='dark'] {
+.dark {
   --background: #0E0C0B;
   --foreground: #F2EDE9;
   --card: rgba(20, 17, 16, 0.7);
@@ -96,7 +96,7 @@
   box-shadow: 0 0 0 1px rgba(0,0,0,.03),0 2px 4px rgba(0,0,0,.05),0 12px 24px rgba(0,0,0,.05);
 }
 
-[data-theme='dark'] .premium-shadow {
+.dark .premium-shadow {
   box-shadow: 0 0 0 1px rgba(255,255,255,.05),0 2px 4px rgba(0,0,0,.3),0 12px 24px rgba(0,0,0,.4);
 }
 

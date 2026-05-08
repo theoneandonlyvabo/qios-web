@@ -17,6 +17,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/theme-toggle";
 
+import { useRouter } from "next/navigation";
+import { apiRequest } from "@/lib/api";
+import { setAuthData, AuthData } from "@/lib/auth";
+
 const features = [
   {
     icon: LayoutDashboard,
@@ -39,16 +43,36 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
     
-    setTimeout(() => {
+    try {
+      const response = await apiRequest<{ success: boolean; data: AuthData; error: string | null }>(
+        "/auth/login",
+        {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        }
+      );
+
+      if (response.success && response.data) {
+        setAuthData(response.data);
+        router.push("/dashboard");
+      } else {
+        setError(response.error || "Email atau kata sandi salah");
+      }
+    } catch (err: any) {
+      setError(err.message || "Terjadi kesalahan pada server");
+    } finally {
       setIsLoading(false);
-      setError("Email atau kata sandi yang Anda masukkan salah.");
-    }, 2000);
+    }
   };
 
   return (
@@ -156,6 +180,8 @@ export default function LoginPage() {
                     type="email"
                     placeholder="admin@bisnis-anda.com"
                     required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="bg-muted/30 border-border/40 h-10 lg:h-12 rounded-xl px-4 focus:bg-card focus:ring-1 focus:ring-brand/20 transition-all"
                   />
                 </div>
@@ -175,6 +201,8 @@ export default function LoginPage() {
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                       className="bg-muted/30 border-border/40 h-10 lg:h-12 rounded-xl pl-4 pr-12 focus:bg-card focus:ring-1 focus:ring-brand/20 transition-all"
                     />
                     <button
@@ -220,6 +248,7 @@ export default function LoginPage() {
                 </Button>
               </form>
             </CardContent>
+
 
             <CardFooter className="flex flex-col space-y-3 lg:space-y-4 p-5 lg:p-10 pt-0 lg:pt-0 bg-muted/[0.02]">
               <div className="w-full flex items-center gap-3 py-1 lg:py-2">
