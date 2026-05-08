@@ -1,24 +1,37 @@
 // domain/xendit/handler.go
-// TODO: implement semua handler
+//
+// Handler endpoint Xendit (xenPlatform). Sebagian besar webhook + connect/status.
+// Di sprint ini hanya stub 501 — implementasi penuh menyusul setelah register flow stabil.
+// Lihat docs/qios-api.yaml untuk kontrak penuh:
+//   POST /payment/xendit/connect
+//   GET  /payment/xendit/status
+//   POST /payment/xendit/webhook
 
 package xendit
 
 import (
 	"database/sql"
-	"net/http"
 
 	"github.com/labstack/echo/v4"
+
 	"github.com/theoneandonlyvabo/qios-web/apps/server/config"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/response"
 )
 
-func connectMidtrans(db *sql.DB, cfg *config.Config) echo.HandlerFunc {
-	return func(c echo.Context) error { return c.JSON(http.StatusNotImplemented, nil) }
+func connectXendit(_ *sql.DB, _ *config.Config) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		return response.NotImplemented(c, "connect xendit not yet implemented")
+	}
 }
 
-func getMidtransStatus(db *sql.DB) echo.HandlerFunc {
-	return func(c echo.Context) error { return c.JSON(http.StatusNotImplemented, nil) }
+func getXenditStatus(_ *sql.DB) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		return response.NotImplemented(c, "xendit status not yet implemented")
+	}
 }
 
-func handleWebhook(db *sql.DB, cfg *config.Config) echo.HandlerFunc {
-	return func(c echo.Context) error { return c.JSON(http.StatusNotImplemented, nil) }
+func handleWebhook(_ *sql.DB, _ *config.Config) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		return response.NotImplemented(c, "xendit webhook not yet implemented")
+	}
 }

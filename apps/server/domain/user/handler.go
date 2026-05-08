@@ -6,7 +6,7 @@
 //   GET    /users/me  — profil owner + bisnis
 //   PATCH  /users/me  — update profil owner
 //   GET    /business  — info bisnis milik owner
-//   PATCH  /business  — update info bisnis
+//   PATCH  /business  — update info bisnis (selain xendit_*)
 //
 // Manajemen operator dipindah ke domain/operator.
 
@@ -17,6 +17,7 @@ import (
 	"errors"
 
 	"github.com/labstack/echo/v4"
+
 	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/response"
 )
 
@@ -39,11 +40,14 @@ func userIDFromCtx(c echo.Context) string {
 // ----------------------------------------------------------------
 
 type businessInMe struct {
-	ID                string  `json:"id"`
-	Name              string  `json:"name"`
-	Location          *string `json:"location"`
-	Category          *string `json:"category"`
-	MidtransConnected bool    `json:"midtrans_connected"`
+	ID           string  `json:"id"`
+	QMID         string  `json:"qm_id"`
+	BusinessName string  `json:"business_name"`
+	Phone        *string `json:"phone"`
+	Address      *string `json:"address"`
+	City         *string `json:"city"`
+	Country      *string `json:"country"`
+	XenditStatus string  `json:"xendit_status"`
 }
 
 type meResponse struct {
@@ -65,15 +69,16 @@ func getMe(db *sql.DB) echo.HandlerFunc {
 
 		err := db.QueryRow(
 			`SELECT u.id, u.email, u.full_name, u.phone,
-			        b.id, b.name, b.location, b.category, b.midtrans_connected
+			        b.id, b.qm_id, b.business_name, b.phone, b.address, b.city, b.country, b.xendit_status
 			 FROM users u
 			 LEFT JOIN businesses b ON b.user_id = u.id
 			 WHERE u.id = $1`,
 			userID,
 		).Scan(
 			&res.ID, &res.Email, &res.FullName, &res.Phone,
-			&res.Business.ID, &res.Business.Name, &res.Business.Location,
-			&res.Business.Category, &res.Business.MidtransConnected,
+			&res.Business.ID, &res.Business.QMID, &res.Business.BusinessName,
+			&res.Business.Phone, &res.Business.Address, &res.Business.City,
+			&res.Business.Country, &res.Business.XenditStatus,
 		)
 
 		if errors.Is(err, sql.ErrNoRows) {
@@ -97,7 +102,7 @@ func updateMe(db *sql.DB) echo.HandlerFunc {
 
 		var req struct {
 			FullName string  `json:"full_name" validate:"omitempty,min=1,max=255"`
-			Phone    *string `json:"phone"     validate:"omitempty,min=1,max=20"`
+			Phone    *string `json:"phone"     validate:"omitempty,min=1,max=32"`
 		}
 		if err := c.Bind(&req); err != nil {
 			return response.BadRequest(c, "invalid request body")
@@ -127,14 +132,14 @@ func updateMe(db *sql.DB) echo.HandlerFunc {
 // ----------------------------------------------------------------
 
 type businessResponse struct {
-	ID                string  `json:"id"`
-	Name              string  `json:"name"`
-	Slug              string  `json:"slug"`
-	Location          *string `json:"location"`
-	Category          *string `json:"category"`
-	Timezone          string  `json:"timezone"`
-	Currency          string  `json:"currency"`
-	MidtransConnected bool    `json:"midtrans_connected"`
+	ID           string  `json:"id"`
+	QMID         string  `json:"qm_id"`
+	BusinessName string  `json:"business_name"`
+	Phone        *string `json:"phone"`
+	Address      *string `json:"address"`
+	City         *string `json:"city"`
+	Country      *string `json:"country"`
+	XenditStatus string  `json:"xendit_status"`
 }
 
 func getBusiness(db *sql.DB) echo.HandlerFunc {
@@ -143,12 +148,12 @@ func getBusiness(db *sql.DB) echo.HandlerFunc {
 
 		var res businessResponse
 		err := db.QueryRow(
-			`SELECT id, name, slug, location, category, timezone, currency, midtrans_connected
+			`SELECT id, qm_id, business_name, phone, address, city, country, xendit_status
 			 FROM businesses WHERE id = $1`,
 			businessID,
 		).Scan(
-			&res.ID, &res.Name, &res.Slug, &res.Location, &res.Category,
-			&res.Timezone, &res.Currency, &res.MidtransConnected,
+			&res.ID, &res.QMID, &res.BusinessName, &res.Phone,
+			&res.Address, &res.City, &res.Country, &res.XenditStatus,
 		)
 
 		if errors.Is(err, sql.ErrNoRows) {
@@ -171,11 +176,11 @@ func updateBusiness(db *sql.DB) echo.HandlerFunc {
 		businessID := businessIDFromCtx(c)
 
 		var req struct {
-			Name     string `json:"name"     validate:"omitempty,min=1,max=255"`
-			Location string `json:"location" validate:"omitempty,min=1,max=255"`
-			Category string `json:"category" validate:"omitempty,min=1,max=100"`
-			Timezone string `json:"timezone" validate:"omitempty,min=1,max=100"`
-			Currency string `json:"currency" validate:"omitempty,min=1,max=10"`
+			BusinessName string `json:"business_name" validate:"omitempty,min=1,max=255"`
+			Phone        string `json:"phone"         validate:"omitempty,min=1,max=32"`
+			Address      string `json:"address"       validate:"omitempty,min=1,max=1024"`
+			City         string `json:"city"          validate:"omitempty,min=1,max=100"`
+			Country      string `json:"country"       validate:"omitempty,min=2,max=100"`
 		}
 		if err := c.Bind(&req); err != nil {
 			return response.BadRequest(c, "invalid request body")
@@ -186,14 +191,14 @@ func updateBusiness(db *sql.DB) echo.HandlerFunc {
 
 		_, err := db.Exec(
 			`UPDATE businesses
-			 SET name     = COALESCE(NULLIF($1, ''), name),
-			     location = COALESCE(NULLIF($2, ''), location),
-			     category = COALESCE(NULLIF($3, ''), category),
-			     timezone = COALESCE(NULLIF($4, ''), timezone),
-			     currency = COALESCE(NULLIF($5, ''), currency),
-			     updated_at = NOW()
+			 SET business_name = COALESCE(NULLIF($1, ''), business_name),
+			     phone         = COALESCE(NULLIF($2, ''), phone),
+			     address       = COALESCE(NULLIF($3, ''), address),
+			     city          = COALESCE(NULLIF($4, ''), city),
+			     country       = COALESCE(NULLIF($5, ''), country),
+			     updated_at    = NOW()
 			 WHERE id = $6`,
-			req.Name, req.Location, req.Category, req.Timezone, req.Currency, businessID,
+			req.BusinessName, req.Phone, req.Address, req.City, req.Country, businessID,
 		)
 		if err != nil {
 			return response.Internal(c)
@@ -202,4 +207,3 @@ func updateBusiness(db *sql.DB) echo.HandlerFunc {
 		return response.NoContent(c)
 	}
 }
-

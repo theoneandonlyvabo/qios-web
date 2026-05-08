@@ -104,10 +104,10 @@ apps/server/
 └── domain/
     ├── admin/              # admin panel, audit log, monitoring
     ├── analytic/           # AI analytics — rule-based insight engine
-    ├── auth/               # login, Google OAuth, refresh, logout
+    ├── auth/               # register, login, Google OAuth, refresh, logout
     ├── dashboard/          # summary, tren transaksi, peak hours
     ├── operator/           # CRUD akun operator per bisnis
-    ├── payment/            # koneksi Xendit, webhook handler
+    ├── payment/            # Xendit service (CreateManagedAccount, future webhook handler)
     ├── product/            # katalog produk, soft delete
     ├── statistic/          # produk terlaris, breakdown performa
     ├── transaction/        # pos orders dan order items
@@ -152,6 +152,7 @@ Kontrak lengkap ada di `docs/qios-api.yaml` (OpenAPI 3.0.3).
 
 | Domain | Endpoint | Method | Keterangan |
 |--------|----------|--------|------------|
+| Auth | `/auth/register` | POST | Registrasi owner + bisnis + sub-account Xendit dalam satu tx atomic. Body: `email`, `password`, `full_name`, `phone`, `business_name`, `address`, `city`, `country`. Response: `access_token`, `user_id`, `business_id`, `qm_id`, `xendit_status`. |
 | Auth | `/auth/login` | POST | Login email/password |
 | Auth | `/auth/google` | POST | Login Google OAuth |
 | Auth | `/auth/refresh` | POST | Refresh access token |
@@ -192,23 +193,41 @@ Setiap perubahan endpoint **harus diupdate di `docs/qios-api.yaml` terlebih dahu
 | 001 | `users` | Owner bisnis, support email + Google OAuth |
 | 002 | `refresh_tokens` | Multi-device session |
 | 003 | `password_reset_tokens` | Reset password via email, expire 1 jam |
-| 004 | `plans`, `subscriptions` | Tier langganan QIOS — seed data pending konfirmasi board |
-| 005 | `businesses` | Satu bisnis per owner, menyimpan Xendit server key (encrypted) |
+| 004 | `plans`, `subscriptions` | Tier langganan QIOS — seed data pending konfirmasi board (slot disiapkan, belum diisi) |
+| 005 | `businesses` | Satu bisnis per owner. Menyimpan `qm_id` (format `QM-NNNNNN`), profil bisnis (name/phone/address/city/country), serta `xendit_account_id`, `xendit_api_key`, `xendit_secret_key`, dan `xendit_status` (`PENDING`/`REGISTERED`/`ACTIVE`/`SUSPENDED`). Credentials Xendit harus dienkripsi sebelum disimpan. |
 | 006 | `operators` | Akun kasir per bisnis |
 | 007 | `products` | Katalog produk, soft delete |
 | 008 | `pos_orders` | Order dari kasir, linked ke Xendit via `order_id` |
 | 009 | `pos_order_items` | Item per order, snapshot nama dan harga saat transaksi |
-| 010 | `xendit_payments` | Record pembayaran Xendit, menyimpan transaction ID, timestamp, status, dan nominal |
+| 010 | `xendit_payments` | Record pembayaran Xendit. Menyimpan `xendit_account_id` (sub-account `for-user-id`), `xendit_invoice_id`, `xendit_charge_id`, `payment_method`, `amount`, `status`, dan `raw_payload` JSONB. Migration ini juga drop tabel lama `midtrans_payments` (peninggalan iterasi pre-Xendit). |
 | 011 | `webhook_events` | Log semua notifikasi masuk dari Xendit |
 | 012 | `admin_audit_logs` | Audit trail aksi admin |
+| 013 | `operators` (alter) | Tambah `operator_code` untuk login kasir |
 
 **Aturan penting:**
 - `product_name` dan `unit_price` di `pos_order_items` adalah snapshot — disimpan saat transaksi terjadi, bukan FK ke produk. Ini menjaga akurasi data historis jika produk diedit atau dihapus.
 - `xendit_secret_key` di tabel `businesses` harus dienkripsi di level aplikasi sebelum disimpan.
+- `qm_id` di-generate di application layer (`platform/qmid`) dengan format `QM-NNNNNN`. Generator wajib dipanggil di dalam tx yang sama dengan INSERT businesses, dan menggunakan `SELECT … FOR UPDATE` untuk row-level lock.
 - Semua tabel menggunakan `UUID PRIMARY KEY DEFAULT gen_random_uuid()`.
 - Setiap tabel baru butuh index pada foreign key dan kolom yang sering di-query.
 - Gunakan soft delete (`deleted_at`) untuk data yang punya histori transaksi.
 - Tidak ada data xendit_payments yang boleh hilang meski webhook terlambat masuk.
+
+### Onboarding Flow (Register)
+
+`POST /auth/register` mengeksekusi atomic transaction berikut:
+
+1. `BEGIN` (isolation `SERIALIZABLE`)
+2. INSERT `users`
+3. Generate `qm_id` via `platform/qmid.Generate(tx)` — `SELECT qm_id FROM businesses ORDER BY qm_id DESC LIMIT 1 FOR UPDATE`
+4. INSERT `businesses` dengan `xendit_status = 'PENDING'`
+5. Call `payment.XenditService.CreateManagedAccount` → `POST {XENDIT_BASE_URL}/v2/accounts` (Basic auth, `type: "MANAGED"`, `public_profile.business_name`)
+6. UPDATE `businesses` set `xendit_account_id`, `xendit_api_key`, `xendit_secret_key`, `xendit_status = 'REGISTERED'`
+7. `COMMIT`
+
+Kalau step 5 atau 6 gagal, seluruh tx di-rollback. Step 5 adalah external network call di tengah tx — orphaned Xendit sub-account dimungkinkan kalau commit DB gagal *setelah* call sukses; reconcile via job, bukan inline.
+
+Lifecycle `xendit_status`: `PENDING` → `REGISTERED` (post-account creation, KYC belum selesai) → `ACTIVE` (webhook `account.activated`) → opsional `SUSPENDED`.
 
 ---
 
@@ -439,8 +458,9 @@ Semua env vars dibaca via `config.Load()` di startup. Tidak ada `os.Getenv()` la
 | `JWT_SECRET` | Secret untuk sign JWT | — |
 | `JWT_ACCESS_EXPIRY` | Durasi access token | `15m` |
 | `JWT_REFRESH_EXPIRY` | Durasi refresh token | `720h` |
-| `XENDIT_SECRET_KEY` | Secret key Xendit global (fallback) | — |
+| `XENDIT_SECRET_KEY` | Master secret key Xendit (xenPlatform). Dipakai untuk Basic auth saat membuat sub-account dan operasi platform-level. **Wajib di-set** — startup gagal kalau kosong. | — |
 | `XENDIT_ENV` | `sandbox` atau `production` | `sandbox` |
+| `XENDIT_BASE_URL` | Override base URL Xendit (untuk testing/staging) | `https://api.xendit.io` |
 
 Buat file `.env` di `apps/server/` untuk local development. File ini tidak boleh di-commit — sudah ada di `.gitignore`.
 
