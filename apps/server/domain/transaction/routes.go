@@ -1,6 +1,6 @@
-// domain/order/routes.go
+// domain/transaction/routes.go
 
-package order
+package transaction
 
 import (
 	"database/sql"

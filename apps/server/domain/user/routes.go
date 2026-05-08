@@ -20,11 +20,5 @@ func RegisterRoutes(e *echo.Echo, db *sql.DB, authMiddleware echo.MiddlewareFunc
 	b.GET("", getBusiness(db))
 	b.PATCH("", updateBusiness(db), appmiddleware.RequireOwner)
 
-	// Operator management — owner only
-	o := b.Group("/operators", appmiddleware.RequireOwner)
-	o.GET("", listOperators(db))
-	o.POST("", createOperator(db))
-	o.PATCH("/:operator_id", updateOperator(db))
-	o.DELETE("/:operator_id", deleteOperator(db))
-	o.GET("/:operator_id/qr", getOperatorQR(db))
+	// Operator management dipindah ke domain/operator (path tetap /business/operators).
 }

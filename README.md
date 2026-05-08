@@ -1,474 +1,407 @@
-# qios-web by skalar solutions
+<div align="center">
+
+# QIOS — by Skalar Solutions
+
+**Platform manajemen keuangan dan operasional untuk UMKM Indonesia.**
+Bukan POS — QIOS adalah BI layer di atas payment flow.
 
 <br />
 
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
-[![Echo](https://img.shields.io/badge/Echo-v4-00ADD8?style=for-the-badge)](https://echo.labstack.com/)
+[![Go](https://img.shields.io/badge/Go-1.26.2-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=for-the-badge&logo=jsonwebtokens)](https://jwt.io/)
-[![Midtrans](https://img.shields.io/badge/Payment-Midtrans-003399?style=for-the-badge)](https://midtrans.com/)
+[![Xendit](https://img.shields.io/badge/Payment-Xendit-003399?style=for-the-badge)](https://xendit.co/)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)]()
 
 <br />
 
 [![PRD](https://img.shields.io/badge/📄%20Baca%20PRD%20Lengkap-Google%20Docs-4285F4?style=for-the-badge&logo=googledocs&logoColor=white)](https://docs.google.com/document/d/10RzXPqzt4TTMYUx1XPSTBdMS4jRiizxS0h3nTYEVRIM/edit?usp=sharing)
 
-<br />
-
-QIOS adalah platform SaaS berbasis web untuk manajemen pembayaran, inventori, dan AI insights khusus UMKM Indonesia. Dibangun dengan arsitektur monorepo yang memisahkan tanggung jawab secara jelas antara frontend, backend, dan database.
+</div>
 
 ---
 
 ## Daftar Isi
 
-- [Gambaran Arsitektur](#gambaran-arsitektur)
-- [Kenapa Next.js, Go, dan PostgreSQL?](#kenapa-nextjs-go-dan-postgresql)
+- [Arsitektur](#arsitektur)
 - [Struktur Repository](#struktur-repository)
 - [Frontend Guide](#-frontend-guide)
 - [Backend Guide](#-backend-guide)
 
 ---
 
-## Gambaran Arsitektur
+## Arsitektur
 
-QIOS dibangun dengan tiga layer utama:
+```
+Browser (Owner / Operator)
+         │
+         ▼
+  ┌─────────────────┐
+  │   apps/client   │  Next.js 15 — UI, route groups, API Routes
+  └────────┬────────┘
+           │  HTTP (internal)
+           ▼
+  ┌─────────────────┐
+  │   apps/server   │  Go + Echo — business logic, auth, webhook
+  └────────┬────────┘
+           │
+           ▼
+  ┌─────────────────┐
+  │   PostgreSQL    │  Docker — persistent storage, 12 migrations
+  └─────────────────┘
+```
 
-| Layer | Teknologi | Tanggung Jawab |
+> Browser tidak pernah ngobrol langsung dengan Go. Semua request wajib lewat API Routes Next.js terlebih dahulu.
+
+### Tech Stack
+
+| Layer | Teknologi | Alasan |
 |---|---|---|
-| Client | <img src="https://skillicons.dev/icons?i=nextjs" height="20" /> Next.js | Tampilan dan gateway request |
-| Server | <img src="https://skillicons.dev/icons?i=go" height="20" /> Go + Echo | Logika bisnis dan keputusan |
-| Database | <img src="https://skillicons.dev/icons?i=postgres" height="20" /> PostgreSQL | Penyimpanan data permanen |
-
-**Cara kerjanya:**
-
-```
-Browser (User)
-      ↓
-apps/client     → Next.js   — UI dan mid-end API Routes
-      ↓
-apps/server     → Go        — business logic, auth, payment
-      ↓
-PostgreSQL                  — penyimpanan data permanen
-```
-
-> Browser tidak pernah ngobrol langsung dengan Go. Semua request dari browser harus lewat API Routes di Next.js terlebih dahulu.
-
----
-
-## Kenapa Next.js, Go, dan PostgreSQL?
-
-<img src="https://skillicons.dev/icons?i=nextjs" height="20" /> **Next.js** dipilih karena bisa handle frontend dan mid-end sekaligus dalam satu framework. API Routes-nya jalan di server, jadi bisa jadi jembatan aman antara browser dan backend Go.
-
-<img src="https://skillicons.dev/icons?i=go" height="20" /> **Go** dipilih untuk backend karena performanya tinggi, concurrency-nya native, dan deployment-nya simpel. Sangat cocok untuk handle banyak request paralel seperti payment webhook.
-
-<img src="https://skillicons.dev/icons?i=postgres" height="20" /> **PostgreSQL** dipilih karena mature, stabil, dan mendukung ACID — artinya data transaksi tidak akan corrupt meskipun terjadi error di tengah proses.
+| Frontend | Next.js 15 + TypeScript | Handle UI dan mid-end dalam satu framework |
+| Backend | Go 1.26.2 + Echo v4 | Performa tinggi, concurrency native untuk webhook |
+| Database | PostgreSQL 16 | ACID compliance — data transaksi tidak boleh corrupt |
+| Payment | Xendit xenPlatform | Sub-account per merchant, split rule otomatis |
+| Auth | JWT (httpOnly cookie) | Refresh token aman, access token di memory |
 
 ---
 
 ## Struktur Repository
 
 ```
-/
+qios-web/
 ├── apps/
-│   ├── client/                 → Next.js (frontend + mid-end)
-│   └── server/                 → Go + Echo (backend)
+│   ├── client/          → Next.js (frontend + mid-end)
+│   └── server/          → Go + Echo (backend)
 ├── docs/
-│   └── api.yaml                → OpenAPI spec, kontrak FE dan BE
+│   └── qios-api.yaml    → OpenAPI 3.0.3 — kontrak antara FE dan BE
 ├── docker-compose.yml
 └── .env.example
 ```
 
 ---
 
----
+<br />
+
+<div align="center">
 
 # 🖥 Frontend Guide
 
-> Bagian ini khusus untuk developer yang handle `apps/client` (Next.js).
-> Jika kamu adalah developer backend, loncat ke [Backend Guide](#-backend-guide).
+*Bagian ini untuk developer yang handle `apps/client`.*
+*Developer backend? Loncat ke [Backend Guide](#-backend-guide).*
 
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind](https://img.shields.io/badge/Tailwind-v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-v24.15.0-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind](https://img.shields.io/badge/Tailwind-v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
+</div>
+
+### Tanggung Jawabmu
+
+| ✅ Kamu handle | ❌ Jangan disentuh |
+|---|---|
+| Semua UI — halaman, komponen, layout | `apps/server/` |
+| API Routes sebagai jembatan ke backend Go | `migrations/` |
+| Auth guard dan redirect | Konfigurasi database |
+| Token management (memory, bukan localStorage) | File `.env` server |
 
 ---
 
-## Apa yang Kamu Handle
+### Prerequisites
 
-- Semua tampilan UI — halaman, komponen, layout
-- API Routes sebagai jembatan antara browser dan backend Go
-- Auth guard — cek apakah user sudah login sebelum masuk halaman tertentu
-- Token management — akses token disimpan di memory, bukan localStorage
-
-Kamu **tidak** perlu menyentuh `apps/server`, `migrations/`, atau konfigurasi database.
-
----
-
-## Prerequisites
-
-### <img src="https://skillicons.dev/icons?i=git" height="20" /> 1. Install Git
-
-- Download di: https://git-scm.com/downloads
-- Verifikasi setelah install:
+**1. Git** — https://git-scm.com/downloads
 
 ```bash
 git -v
 ```
 
-### <img src="https://skillicons.dev/icons?i=nodejs" height="20" /> 2. Install Node.js
-
-- Download versi **LTS** terbaru di: https://nodejs.org/en
-- Verifikasi setelah install:
+**2. Node.js v24.15.0** — https://nodejs.org/en
 
 ```bash
-node -v
-npm -v
+node -v   # harus v24.15.0
+npm -v    # harus v10.x ke atas
 ```
 
-Output yang diharapkan: node `v20.x.x` ke atas, npm `v10.x.x` ke atas
-
-### <img src="https://skillicons.dev/icons?i=vscode" height="20" /> 3. Install VS Code (Direkomendasikan)
-
-- Download di: https://code.visualstudio.com/
-- Install extension berikut:
-  - **ESLint** — deteksi error di kode
-  - **Prettier** — format kode otomatis
-  - **Tailwind CSS IntelliSense** — autocomplete class Tailwind
+**3. VS Code** (rekomendasi) — https://code.visualstudio.com/
+Install extension: `ESLint`, `Prettier`, `Tailwind CSS IntelliSense`
 
 ---
 
-## Minta Akses Repository
+### Akses Repository
 
 1. Buat akun GitHub di https://github.com jika belum punya
-2. Kirim username GitHub kamu ke project lead
-3. Terima email undangan dari GitHub, klik **Accept invitation**
-4. Repository bisa diakses di https://github.com/theoneandonlyvabo/qios-web
+2. Kirim username GitHub ke project lead
+3. Terima email undangan → klik **Accept invitation**
+4. Repo: https://github.com/theoneandonlyvabo/qios-web
 
 ---
 
-## Clone Repository
+### Quickstart
 
 ```bash
-# 1. masuk ke folder tempat kamu mau simpan project
-cd Documents
-
-# 2. clone repository
+# Clone
 git clone https://github.com/theoneandonlyvabo/qios-web.git
+cd qios-web/apps/client
 
-# 3. masuk ke folder project
-cd qios-web
-
-# 4. verifikasi isi folder
-ls
-```
-
-Kamu harus melihat folder `apps`, `docs`, dan file `docker-compose.yml`.
-
----
-
-## Setup Project
-
-```bash
-# 1. masuk ke folder client
-cd apps/client
-
-# 2. install semua dependencies
+# Install dependencies
 npm install
 
-# 3. buat file environment dari template
+# Setup environment
 cp .env.example .env.local
+# → Minta nilai .env.local ke project lead. Jangan commit file ini.
 
-# 4. buka dan isi nilai environment
-code .env.local
-```
-
-Tanyakan nilai `.env.local` ke project lead. Jangan pernah commit file ini.
-
----
-
-## Menjalankan Development Server
-
-```bash
+# Jalankan
 npm run dev
 ```
 
-Buka browser dan akses `http://localhost:3000`. Jika muncul tampilan aplikasi, setup berhasil.
+Buka `http://localhost:3000`. Tampilan muncul = setup berhasil.
 
 ---
 
-## Struktur Folder Client
+### Struktur Folder
 
 ```
 apps/client/
 ├── app/
-│   ├── (public)/           # halaman tanpa login — landing, login, register
-│   ├── (dashboard)/        # halaman dengan login — dashboard, profil, transaksi
-│   └── api/                # API Routes — jembatan ke backend Go
-│       ├── auth/           # login, logout, refresh token
-│       ├── user/           # data profil user
-│       ├── order/          # buat dan lihat order
-│       └── payment/        # inisiasi pembayaran
-├── components/             # komponen UI yang bisa dipakai ulang
+│   ├── (dashboard)/        # owner — desktop-first
+│   │   ├── dashboard/      # snapshot bisnis hari ini
+│   │   ├── statistics/     # produk terlaris, tren transaksi
+│   │   ├── analytics/      # AI analytics — insight rule-based
+│   │   ├── history/        # list semua transaksi
+│   │   ├── operators/      # CRUD akun kasir
+│   │   └── login/          # pintu masuk
+│   └── (kasir)/            # operator — mobile-first PWA
+│       └── kasir/          # input order, QR Xendit, status bayar
+├── components/             # komponen UI reusable
 ├── lib/
-│   ├── api.ts              # fetch wrapper untuk request ke Go
+│   ├── api.ts              # fetch wrapper ke Go
 │   └── auth.ts             # manajemen token
-└── middleware.ts            # auth guard untuk halaman dashboard
+└── middleware.ts            # auth guard
 ```
 
 ---
 
-## Environment Variables
+### Environment Variables
 
-```
+```bash
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 API_BASE_URL=http://localhost:8080
 ```
 
-- `NEXT_PUBLIC_` — bisa dibaca browser. Jangan taruh data sensitif di sini
-- Tanpa prefix — server-side only, tidak bisa diakses dari browser
+> `NEXT_PUBLIC_*` — terbaca di browser. Jangan taruh data sensitif.
 
 ---
 
-## Git Workflow
+### Git Workflow
 
 ```
-main            → production-ready, jangan push langsung ke sini
-dev             → branch aktif pengembangan, semua feature branch merge ke sini
-feature/nama    → branch kerjamu, selalu dari dev
+main ──────── production-ready, jangan push langsung
+  └── dev ─── integrasi semua fitur
+        └── feature/<nama> ── branch kerjamu
 ```
 
 ```bash
-# mulai fitur baru
-git checkout dev
-git pull origin dev
+# Mulai fitur baru
+git checkout dev && git pull origin dev
 git checkout -b feature/nama-fitur
 
-# setelah selesai
+# Setelah selesai
 git add .
 git commit -m "feat: deskripsi singkat"
 git push origin feature/nama-fitur
 ```
 
-Buka Pull Request ke `dev` di GitHub. Jangan merge sendiri. Project lead yang review dan merge ke `main` kalau sudah siap.
+Buka Pull Request ke `dev`. Jangan self-merge.
 
 ---
 
-## Aturan Penulisan Kode
+### Aturan Kode
 
-- Komponen UI masuk ke `components/` — fokus tampilan, tidak boleh ada logika bisnis
+- Komponen di `components/` — tampilan saja, tanpa logika bisnis
 - Jangan panggil Go langsung dari browser — selalu lewat `app/api/`
-- Jangan simpan token di `localStorage` — sudah dihandle di `lib/auth.ts`
-- Jangan buat folder baru tanpa diskusi dengan project lead
+- Token tidak boleh di `localStorage` — sudah dihandle di `lib/auth.ts`
+- Chart library: **Recharts** — jangan ganti tanpa diskusi tim
+- Jangan buat folder baru tanpa diskusi project lead
 
 ---
 
-## Common Issues
+<details>
+<summary><strong>Common Issues (klik untuk expand)</strong></summary>
 
-**`npm install` gagal** — pastikan Node.js versi v20 ke atas. Cek dengan `node -v`.
+<br />
 
-**Environment variable tidak terbaca** — pastikan nama file persis `.env.local` dan letaknya di `apps/client/`.
+| Gejala | Solusi |
+|---|---|
+| `npm install` gagal | Cek versi Node: `node -v` harus `v24.15.0` |
+| Environment variable tidak terbaca | Nama file harus persis `.env.local` di `apps/client/` |
+| Error 401 Unauthorized | Token expired — logout dan login ulang |
+| Tidak bisa connect ke backend | Pastikan Go server jalan di `localhost:8080` |
+| Perubahan tidak muncul | Hard refresh: `Ctrl+Shift+R` / `Cmd+Shift+R` |
 
-**Error 401 Unauthorized** — token expired. Coba logout dan login ulang.
-
-**Tidak bisa connect ke backend** — pastikan server Go berjalan di `localhost:8080`. Hubungi developer backend.
-
-**Perubahan tidak muncul** — hard refresh dengan `Ctrl + Shift + R` (Windows) atau `Cmd + Shift + R` (Mac).
+</details>
 
 ---
 
----
+<br />
+
+<div align="center">
 
 # ⚙️ Backend Guide
 
-> Bagian ini khusus untuk developer yang handle `apps/server` (Go + Echo).
-> Jika kamu adalah developer frontend, kembali ke [Frontend Guide](#-frontend-guide).
+*Bagian ini untuk developer yang handle `apps/server`.*
+*Developer frontend? Kembali ke [Frontend Guide](#-frontend-guide).*
 
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
-[![Echo](https://img.shields.io/badge/Echo-v4-00ADD8?style=for-the-badge)](https://echo.labstack.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=for-the-badge&logo=jsonwebtokens)](https://jwt.io/)
-[![Midtrans](https://img.shields.io/badge/Payment-Midtrans-003399?style=for-the-badge)](https://midtrans.com/)
+[![Go](https://img.shields.io/badge/Go-1.26.2-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
+[![Echo](https://img.shields.io/badge/Echo-v4-00ADD8?style=flat-square)](https://echo.labstack.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Xendit](https://img.shields.io/badge/Xendit-xenPlatform-003399?style=flat-square)](https://xendit.co/)
+
+</div>
+
+### Tanggung Jawabmu
+
+| ✅ Kamu handle | ❌ Jangan disentuh |
+|---|---|
+| Semua logika bisnis per domain | `apps/client/` |
+| Auth — issue dan verifikasi JWT | File UI apapun |
+| Xendit xenPlatform — sub-account, QRIS, webhook | Styling atau komponen |
+| Akses database — query dan mutasi PostgreSQL | |
 
 ---
 
-## Apa yang Kamu Handle
+### Prerequisites
 
-- Semua logika bisnis — validasi, kalkulasi, aturan domain
-- Auth — issue dan verifikasi JWT
-- Integrasi Midtrans — inisiasi pembayaran dan handle webhook
-- Akses database — query dan mutasi PostgreSQL
-
-Kamu **tidak** perlu menyentuh `apps/client` atau file UI apapun.
-
----
-
-## Prerequisites
-
-### <img src="https://skillicons.dev/icons?i=git" height="20" /> 1. Install Git
-
-- Download di: https://git-scm.com/downloads
-- Verifikasi:
+**1. Git** — https://git-scm.com/downloads
 
 ```bash
 git -v
 ```
 
-### <img src="https://skillicons.dev/icons?i=go" height="20" /> 2. Install Go
-
-- Download versi terbaru di: https://go.dev/dl/
-- Ikuti proses instalasi sesuai sistem operasi
-- Verifikasi:
+**2. Go 1.26.2** — https://go.dev/dl/
 
 ```bash
-go version
+go version   # harus go1.26.2
 ```
 
-Output yang diharapkan: `go version go1.22.x` ke atas
-
-### <img src="https://skillicons.dev/icons?i=postgres" height="20" /> 3. Install PostgreSQL
-
-- Download di: https://www.postgresql.org/download/
-- Ikuti proses instalasi, catat username dan password yang kamu set
-- Verifikasi:
+**3. Docker** — https://www.docker.com/products/docker-desktop/
 
 ```bash
-psql --version
+docker --version
 ```
 
-### <img src="https://skillicons.dev/icons?i=vscode" height="20" /> 4. Install VS Code (Direkomendasikan)
-
-- Download di: https://code.visualstudio.com/
-- Install extension:
-  - **Go** (by Google) — syntax highlighting, autocomplete, dan tooling Go
+**4. VS Code** (rekomendasi) + extension **Go** (by Google)
 
 ---
 
-## Minta Akses Repository
+### Akses Repository
 
 1. Buat akun GitHub di https://github.com jika belum punya
-2. Kirim username GitHub kamu ke project lead
-3. Terima email undangan dari GitHub, klik **Accept invitation**
-4. Repository bisa diakses di https://github.com/theoneandonlyvabo/qios-web
+2. Kirim username GitHub ke project lead
+3. Terima email undangan → klik **Accept invitation**
+4. Repo: https://github.com/theoneandonlyvabo/qios-web
 
 ---
 
-## Clone Repository
+### Quickstart
 
 ```bash
-# 1. masuk ke folder tempat kamu mau simpan project
-cd Documents
-
-# 2. clone repository
+# Clone
 git clone https://github.com/theoneandonlyvabo/qios-web.git
-
-# 3. masuk ke folder project
 cd qios-web
 
-# 4. verifikasi isi folder
-ls
-```
+# Jalankan PostgreSQL
+docker compose up postgres -d
 
----
-
-## Setup Project
-
-```bash
-# 1. masuk ke folder server
+# Setup server
 cd apps/server
-
-# 2. install semua dependencies Go
 go mod tidy
-
-# 3. buat file environment dari template
 cp .env.example .env
+# → Minta nilai .env ke project lead. Jangan commit file ini.
 
-# 4. buka dan isi nilai environment
-code .env
+# Jalankan (migration otomatis saat startup)
+go run ./cmd/...
 ```
 
-Tanyakan nilai `.env` ke project lead. Jangan pernah commit file ini.
+Server jalan di `http://localhost:8080`.
 
 ---
 
-## Menjalankan Development Server
-
-```bash
-go run cmd/main.go
-```
-
-Server akan berjalan di `http://localhost:8080`. Verifikasi dengan:
-
-```bash
-curl http://localhost:8080/health
-```
-
-Output yang diharapkan: `{"status":"ok"}`
-
----
-
-## Struktur Folder Server
+### Struktur Folder
 
 ```
 apps/server/
-├── cmd/
-│   └── main.go             # entry point — jalanin server di sini
-├── domain/                 # semua logika bisnis per area
-│   ├── auth/               # login, register, issue dan refresh JWT
-│   │   ├── handler.go      # terima HTTP request, validasi input
-│   │   ├── service.go      # logika bisnis
-│   │   └── repository.go   # query database
-│   ├── user/               # data user, update profil
-│   ├── order/              # buat order, cek status
-│   └── payment/            # integrasi Midtrans, handle webhook
-├── platform/               # utility yang dipakai lintas domain
-│   ├── jwt/                # generate dan verify token
-│   ├── middleware/         # auth middleware, rate limiter
-│   ├── database/           # koneksi postgres
-│   └── response/           # format standar semua API response
-├── migrations/             # SQL schema — jangan edit manual
-├── config/
-│   └── config.go           # load environment variables
-├── go.mod
-└── go.sum
+├── cmd/main.go             # entry point
+├── config/config.go        # load semua env vars ke struct Config
+├── domain/                 # logika bisnis per area
+│   ├── admin/              # admin panel, audit log
+│   ├── analytic/           # rule-based insight engine
+│   ├── auth/               # login, refresh, logout
+│   ├── dashboard/          # summary, tren, peak hours
+│   ├── operator/           # CRUD akun kasir
+│   ├── payment/            # Xendit, webhook handler
+│   ├── product/            # katalog produk, soft delete
+│   ├── statistic/          # produk terlaris, breakdown
+│   ├── transaction/        # pos orders, order items
+│   └── user/               # profil user dan bisnis
+├── platform/
+│   ├── database/           # koneksi PostgreSQL + migrasi
+│   ├── jwt/                # issue dan verify token
+│   ├── middleware/         # auth guard, role check
+│   └── response/           # helper JSON response standar
+└── migrations/             # file .sql bernomor urut (001–012)
 ```
 
-**Aturan layer di dalam setiap domain:**
+**Status implementasi:**
+
+| Domain | Status |
+|---|---|
+| auth | ✅ Done |
+| user | ✅ Done |
+| product | ✅ Done |
+| operator | ✅ Done |
+| transaction | 🔄 In progress |
+| payment / xendit | 🔄 In progress |
+| dashboard | ⏳ Pending |
+| statistic | ⏳ Pending |
+| analytic | ⏳ Pending |
+| admin | ⏳ Pending |
+
+**Aturan layer dalam setiap domain:**
 
 ```
 handler.go    → terima request, validasi input, return response
-service.go    → semua keputusan bisnis ada di sini
-repository.go → query database saja, tidak ada logika
+    ↓
+service.go    → semua keputusan bisnis di sini
+    ↓
+repository.go → query database saja, tanpa logika
 ```
 
-Tidak boleh skip layer. Handler tidak boleh langsung query database. Service tidak boleh tau soal HTTP.
+Handler tidak boleh sentuh DB. Service tidak boleh tau soal HTTP.
 
 ---
 
-## Environment Variables
+### Environment Variables
 
-```
-APP_PORT=8080
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=qios
-JWT_SECRET=your_jwt_secret
-JWT_ACCESS_EXPIRY=15m
-JWT_REFRESH_EXPIRY=720h
-MIDTRANS_SERVER_KEY=your_midtrans_key
-MIDTRANS_ENV=sandbox
-```
+| Variable | Nilai Default | Keterangan |
+|---|---|---|
+| `APP_PORT` | `8080` | Port server |
+| `DB_HOST` | `localhost` | Host PostgreSQL |
+| `DB_PORT` | `5432` | Port PostgreSQL |
+| `DB_USER` | `postgres` | Username DB |
+| `DB_PASSWORD` | — | Password DB |
+| `DB_NAME` | `qios` | Nama database |
+| `JWT_SECRET` | — | **Wajib diisi** — tidak boleh kosong |
+| `JWT_ACCESS_EXPIRY` | `15m` | Durasi access token |
+| `JWT_REFRESH_EXPIRY` | `720h` | Durasi refresh token |
+| `XENDIT_SECRET_KEY` | — | Secret key Xendit |
+| `XENDIT_ENV` | `sandbox` | `sandbox` atau `production` |
 
 ---
 
-## Format API Response
+### Format API Response
 
-Semua endpoint wajib menggunakan format response berikut. Jangan return format berbeda:
+Semua endpoint wajib pakai format ini — jangan buat format sendiri:
 
 ```json
 {
@@ -479,96 +412,113 @@ Semua endpoint wajib menggunakan format response berikut. Jangan return format b
 }
 ```
 
-Format ini sudah dihandle di `platform/response/`. Gunakan helper yang tersedia, jangan buat sendiri.
+Gunakan helper dari `platform/response/`.
 
 ---
 
-## Auth Flow
+### Auth Flow
 
 ```
 POST /auth/login
-  → verifikasi email + password di DB
-  → issue access token (15 menit) + refresh token (30 hari)
-  → return ke Next.js
+  → verifikasi email + password
+  → issue access token (15m) + refresh token (720h)
 
-Next.js simpan refresh token di httpOnly cookie
-Browser simpan access token di memory
+Next.js:  refresh token → httpOnly cookie
+Browser:  access token → memory
 
-Setiap request berikutnya:
-  → browser kirim access token di header Authorization
-  → middleware Go verifikasi token sebelum request diproses
+Setiap request:
+  → Authorization: Bearer <access_token>
+  → middleware verifikasi sebelum handler dipanggil
 ```
 
 ---
 
-## Payment Webhook Flow
+### Payment Flow — Xendit + xenPlatform
+
+QIOS pakai **xenPlatform**: satu master account QIOS menaungi banyak sub-account merchant. Payment masuk ke sub-account masing-masing, fee QIOS diambil otomatis via split rule.
 
 ```
-User bayar di Midtrans
-  → Midtrans kirim POST ke /payment/webhook
-  → handler verifikasi signature Midtrans
-  → update status order di database
+Operator pilih produk di kasir
+  ↓
+Server buat order_id unik (QIOS-YYYYMMDD-xxxx) → simpan ke pos_orders
+  ↓
+QR static Xendit merchant ditampilkan ke pembeli
+  ↓
+Pembeli scan dan bayar — order_id jadi payment reference
+  ↓
+Xendit → POST /payment/xendit/webhook
+  ↓
+Server cocokkan order_id → update status transaksi
 ```
 
-Webhook harus selalu verifikasi signature sebelum proses apapun. Jangan pernah skip langkah ini.
+> Setiap request ke Xendit wajib include header `for-user-id: {xendit_account_id}`.
+>
+> **Webhook wajib verifikasi signature Xendit sebelum proses apapun. Jangan skip.**
 
 ---
 
-## Git Workflow
+### Git Workflow
 
 ```
-main            → production-ready, jangan push langsung ke sini
-dev             → branch aktif pengembangan, semua feature branch merge ke sini
-feature/nama    → branch kerjamu, selalu dari dev
+main ──────── production-ready, jangan push langsung
+  └── dev ─── integrasi semua fitur
+        └── feature/<nama> ── branch kerjamu
 ```
 
 ```bash
-# mulai fitur baru
-git checkout dev
-git pull origin dev
+# Mulai fitur baru
+git checkout dev && git pull origin dev
 git checkout -b feature/nama-fitur
 
-# setelah selesai
+# Setelah selesai
 git add .
 git commit -m "feat: deskripsi singkat"
 git push origin feature/nama-fitur
 ```
 
-Buka Pull Request ke `dev` di GitHub. Jangan merge sendiri. Project lead yang review dan merge ke `main` kalau sudah siap.
-
 **Format commit:**
 
 ```
-feat: tambah endpoint order
-fix: perbaiki validasi JWT expired
+feat: tambah endpoint POST /transactions
+fix: perbaiki type assertion panic di product handler
 refactor: pisah service dan repository di domain payment
 chore: update go dependencies
+docs: update qios-api.yaml dengan domain transaction
 ```
 
 ---
 
-## Aturan Penulisan Kode
+### Aturan Kode
 
-- Setiap domain punya tiga file — handler, service, repository. Jangan gabung
-- Antar domain tidak boleh saling import langsung — komunikasi lewat interface
-- Semua response pakai helper dari `platform/response/`
-- Jangan taruh logika bisnis di handler atau repository
-- Jangan buat folder baru tanpa diskusi dengan project lead
-
----
-
-## Common Issues
-
-**`go mod tidy` error** — pastikan Go versi 1.22 ke atas. Cek dengan `go version`.
-
-**Environment variable tidak terbaca** — pastikan nama file persis `.env` dan letaknya di `apps/server/`.
-
-**Tidak bisa connect ke PostgreSQL** — pastikan PostgreSQL sedang berjalan dan nilai `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` di `.env` sudah benar.
-
-**Port 8080 sudah dipakai** — ada proses lain yang pakai port yang sama. Matikan prosesnya atau ganti `APP_PORT` di `.env`.
+- Tidak ada `os.Getenv()` di luar `config/config.go`
+- Semua domain wajib pakai interface (bukan concrete struct) agar bisa di-mock
+- Semua method service dan repository harus terima `context.Context`
+- Antar domain tidak boleh saling import langsung
+- Semua response via helper `platform/response/`
+- Migration bersifat append-only — jangan edit file yang sudah ada
+- Jangan buat folder baru tanpa diskusi project lead
 
 ---
 
-## Kontak
+<details>
+<summary><strong>Common Issues (klik untuk expand)</strong></summary>
 
-Jika ada pertanyaan tentang codebase ini, hubungi project lead sebelum membuat asumsi sendiri.
+<br />
+
+| Gejala | Solusi |
+|---|---|
+| `go mod tidy` error | Cek versi Go: `go version` harus `go1.26.2` |
+| Env var tidak terbaca | Nama file harus persis `.env` di `apps/server/` |
+| Tidak bisa connect ke PostgreSQL | Cek Docker: `docker compose ps` — pastikan container aktif |
+| Port 8080 dipakai proses lain | Matikan proses atau ganti `APP_PORT` di `.env` |
+| Migration gagal | Jalankan server dari direktori `apps/server/`, bukan root repo |
+
+</details>
+
+---
+
+<div align="center">
+
+*Pertanyaan tentang codebase? Hubungi project lead sebelum membuat asumsi sendiri.*
+
+</div>

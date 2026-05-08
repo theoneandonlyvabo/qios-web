@@ -16,14 +16,13 @@ QIOS bukan POS konvensional dan bukan sekadar tools pencatatan. QIOS menggantika
 
 **Tiga lapisan solusi utama:**
 - **Otomasi pencatatan dan akuntansi** — transaksi dicatat, dikategorikan, dan dikelompokkan otomatis ke struktur akun sesuai standar
-- **Manajemen order dan operasional** — menghubungkan alur order masuk, invoice, dan pembayaran dalam satu sistem via Midtrans Marketplace
+- **Manajemen order dan operasional** — menghubungkan alur order masuk, invoice, dan pembayaran dalam satu sistem via xenPlatform
 - **Analytics dan business intelligence** — data diolah menjadi insight: tren pendapatan, analisis biaya, deteksi anomali, dan rekomendasi strategis
 
 **Yang QIOS lakukan:**
-- Menerima pembayaran via QR Midtrans milik merchant
+- Menerima pembayaran via QRIS Xendit milik merchant
 - Merekam setiap transaksi beserta item yang dibeli
 - Mengolah data transaksi menjadi visualisasi dan insight
-- Membuat dan mengirim invoice dengan payment link terintegrasi
 - Menyediakan interface kasir sederhana untuk operator di device Android
 
 **Yang QIOS tidak lakukan (MVP):**
@@ -36,7 +35,7 @@ QIOS bukan POS konvensional dan bukan sekadar tools pencatatan. QIOS menggantika
 
 ## Pengguna dan Role
 
-**Owner** — pemilik bisnis, akses penuh ke dashboard, analytics, AI insight, order management, invoice, dan semua data bisnis. Login via email/password atau Google OAuth.
+**Owner** — pemilik bisnis, akses penuh ke dashboard, statistics, AI analytics, history transaksi, dan manajemen operator. Login via email/password atau Google OAuth.
 
 **Operator** — kasir/pegawai, akses terbatas ke interface kasir saja. Login via email/password. Dibuat dan dikelola oleh owner. Tidak support Google OAuth.
 
@@ -75,11 +74,11 @@ Interface kasir ditargetkan sebagai **PWA di Android**. iOS bukan prioritas MVP.
 | Route | Halaman | Keterangan |
 |-------|---------|------------|
 | `/login` | Login | Pintu masuk ke QIOS |
-| `/dashboard` | Dashboard | Snapshot kondisi bisnis |
-| `/analytics` | Analytics | Deep dive performa bisnis |
-| `/insight` | AI Insight | Insight rule-based dari data transaksi |
-| `/orders` | Order Management | List semua order dan riwayat per pelanggan |
-| `/settings` | Settings | Placeholder MVP |
+| `/dashboard` | Dashboard | Snapshot kondisi bisnis hari ini |
+| `/statistics` | Statistics | Produk terlaris, breakdown transaksi, performa produk |
+| `/analytics` | AI Analytics | Insight rule-based dari data transaksi |
+| `/history` | History | List semua transaksi raw dengan filter |
+| `/operators` | Operators | CRUD akun operator (kasir) milik bisnis |
 
 **Halaman dalam route group `(kasir)`:**
 
@@ -103,14 +102,16 @@ apps/server/
 │   ├── middleware/         # auth middleware, role guard
 │   └── response/           # helper response JSON standar
 └── domain/
-    ├── auth/               # login, Google OAuth, refresh, logout
-    ├── user/               # profil user dan bisnis
-    ├── order/              # pos orders dan order items
-    ├── invoice/            # invoice management
-    ├── payment/            # koneksi Midtrans, webhook handler
-    ├── analytics/          # summary dan breakdown transaksi
-    ├── insight/            # rule-based business insight
-    └── admin/              # admin panel, audit log, monitoring
+    ├── admin/              # admin panel, audit log, monitoring
+    ├── analytic/           # AI analytics — rule-based insight engine
+    ├── auth/               # register, login, Google OAuth, refresh, logout
+    ├── dashboard/          # summary, tren transaksi, peak hours
+    ├── operator/           # CRUD akun operator per bisnis
+    ├── payment/            # Xendit service (CreateManagedAccount, future webhook handler)
+    ├── product/            # katalog produk, soft delete
+    ├── statistic/          # produk terlaris, breakdown performa
+    ├── transaction/        # pos orders dan order items
+    └── user/               # profil user dan bisnis
 ```
 
 Setiap domain mengikuti pola: `handler.go` → `service.go` → `repository.go`. Handler tidak boleh menyentuh database langsung — semua lewat service dan repository.
@@ -125,25 +126,16 @@ Migration bersifat **append-only** — file yang sudah ada tidak boleh diedit. P
 
 1. Operator pilih produk di interface kasir
 2. Server generate `order_id` unik (format: `QIOS-YYYYMMDD-xxxx`) dan simpan ke `pos_orders`
-3. QR static Midtrans milik merchant ditampilkan ke pembeli
-4. Pembeli scan dan bayar — `order_id` dikirim sebagai payment reference ke Midtrans
-5. Midtrans kirim webhook notifikasi ke server QIOS
+3. QR static Xendit milik merchant ditampilkan ke pembeli
+4. Pembeli scan dan bayar — `order_id` dikirim sebagai payment reference ke Xendit
+5. Xendit kirim webhook notifikasi ke server QIOS
 6. Server cocokkan `order_id` dari webhook ke `pos_orders`, update status, increment `total_sold` di `products`
-
-### Flow Invoice
-
-1. Owner buat invoice via form (nama pelanggan, item, jumlah, harga, due date)
-2. Server simpan invoice dan panggil Midtrans API untuk generate payment link
-3. Owner bagikan payment link ke pelanggan
-4. Pelanggan bayar via Midtrans
-5. Midtrans kirim webhook — server update status invoice ke `paid`
-6. Notifikasi masuk ke owner bahwa pembayaran berhasil
 
 ---
 
 ## API Contract
 
-Kontrak lengkap ada di `docs/api.yaml` (OpenAPI 3.0.3).
+Kontrak lengkap ada di `docs/qios-api.yaml` (OpenAPI 3.0.3).
 
 **Aturan:**
 
@@ -154,32 +146,41 @@ Kontrak lengkap ada di `docs/api.yaml` (OpenAPI 3.0.3).
 - Autentikasi menggunakan Bearer JWT di header `Authorization`
 - Refresh token disimpan di httpOnly cookie, bukan localStorage
 - Role-based access dijalankan di middleware — handler tidak perlu cek role sendiri
-- Endpoint webhook Midtrans (`POST /payment/midtrans/webhook`) tidak menggunakan Bearer auth, tapi diverifikasi via Midtrans signature key
+- Endpoint webhook Xendit (`POST /payment/xendit/webhook`) tidak menggunakan Bearer auth, tapi diverifikasi via Xendit signature key
 
-**Endpoint penting per domain:**
+**Endpoint per domain:**
 
-| Domain | Endpoint | Keterangan |
-|--------|----------|------------|
-| Auth | `POST /auth/login` | Login email/password, Google OAuth |
-| Auth | `POST /auth/refresh` | Refresh access token |
-| Auth | `POST /auth/reset-password` | Reset password via email (token expire 1 jam) |
-| Orders | `POST /orders` | Buat order baru |
-| Orders | `GET /orders` | List semua order (filter by status, pelanggan) |
-| Orders | `GET /orders/:id` | Detail order |
-| Invoice | `POST /invoices` | Buat invoice baru |
-| Invoice | `GET /invoices` | List invoice (filter status: pending/paid/overdue) |
-| Invoice | `GET /invoices/:id` | Detail invoice |
-| Payments | `POST /payments/initiate` | Generate payment link Midtrans |
-| Payments | `GET /payments/:id/status` | Cek status pembayaran |
-| Payments | `POST /payment/midtrans/webhook` | Terima notifikasi dari Midtrans |
-| Analytics | `GET /analytics/summary` | Ringkasan metrik untuk dashboard |
-| Analytics | `GET /analytics/transactions` | Breakdown transaksi dengan filter `?from=&to=` |
-| Insight | `GET /insight` | List insight rule-based dari data transaksi |
-| Transactions | `GET /transactions` | List semua transaksi dengan filter fleksibel |
-| Transactions | `PUT /transactions/:id` | Edit transaksi |
-| Transactions | `DELETE /transactions/:id` | Hapus transaksi (dengan audit trail) |
+| Domain | Endpoint | Method | Keterangan |
+|--------|----------|--------|------------|
+| Auth | `/auth/register` | POST | Registrasi owner + bisnis + sub-account Xendit dalam satu tx atomic. Body: `email`, `password`, `full_name`, `phone`, `business_name`, `address`, `city`, `country`. Response: `access_token`, `user_id`, `business_id`, `qm_id`, `xendit_status`. |
+| Auth | `/auth/login` | POST | Login email/password |
+| Auth | `/auth/google` | POST | Login Google OAuth |
+| Auth | `/auth/refresh` | POST | Refresh access token |
+| Auth | `/auth/logout` | POST | Logout, hapus cookie |
+| User | `/users/me` | GET | Ambil profil + bisnis |
+| User | `/users/me` | PATCH | Update profil |
+| Business | `/business` | GET | Detail bisnis |
+| Business | `/business` | PATCH | Update info bisnis |
+| Operator | `/business/operators` | GET | List semua operator |
+| Operator | `/business/operators` | POST | Tambah operator baru |
+| Operator | `/business/operators/{id}` | DELETE | Hapus operator |
+| Product | `/products` | GET | List produk (filter + search) |
+| Product | `/products` | POST | Tambah produk baru |
+| Product | `/products/{id}` | PATCH | Update produk |
+| Product | `/products/{id}` | DELETE | Soft delete produk |
+| Transaction | `/transactions` | GET | List transaksi (filter + pagination) |
+| Transaction | `/transactions` | POST | Buat order baru dari kasir |
+| Transaction | `/transactions/{id}` | GET | Detail transaksi |
+| Payment | `/payment/xendit/connect` | POST | Hubungkan akun Xendit |
+| Payment | `/payment/xendit/status` | GET | Cek status koneksi Xendit |
+| Payment | `/payment/xendit/webhook` | POST | Terima notifikasi dari Xendit |
+| Dashboard | `/dashboard/summary` | GET | Ringkasan performa bisnis |
+| Dashboard | `/dashboard/transactions/trend` | GET | Tren transaksi harian |
+| Dashboard | `/dashboard/transactions/peak-hours` | GET | Distribusi transaksi per jam |
+| Statistic | `/dashboard/products/top` | GET | Produk terlaris |
+| Analytic | `/insight` | GET | List insight rule-based |
 
-Setiap perubahan endpoint **harus diupdate di `docs/api.yaml` terlebih dahulu** sebelum implementasi.
+Setiap perubahan endpoint **harus diupdate di `docs/qios-api.yaml` terlebih dahulu** sebelum implementasi.
 
 ---
 
@@ -192,23 +193,41 @@ Setiap perubahan endpoint **harus diupdate di `docs/api.yaml` terlebih dahulu** 
 | 001 | `users` | Owner bisnis, support email + Google OAuth |
 | 002 | `refresh_tokens` | Multi-device session |
 | 003 | `password_reset_tokens` | Reset password via email, expire 1 jam |
-| 004 | `plans`, `subscriptions` | Tier langganan QIOS — seed data pending konfirmasi board |
-| 005 | `businesses` | Satu bisnis per owner, menyimpan Midtrans server key (encrypted) |
+| 004 | `plans`, `subscriptions` | Tier langganan QIOS — seed data pending konfirmasi board (slot disiapkan, belum diisi) |
+| 005 | `businesses` | Satu bisnis per owner. Menyimpan `qm_id` (format `QM-NNNNNN`), profil bisnis (name/phone/address/city/country), serta `xendit_account_id`, `xendit_api_key`, `xendit_secret_key`, dan `xendit_status` (`PENDING`/`REGISTERED`/`ACTIVE`/`SUSPENDED`). Credentials Xendit harus dienkripsi sebelum disimpan. |
 | 006 | `operators` | Akun kasir per bisnis |
 | 007 | `products` | Katalog produk, soft delete |
-| 008 | `pos_orders` | Order dari kasir, linked ke Midtrans via `order_id` |
+| 008 | `pos_orders` | Order dari kasir, linked ke Xendit via `order_id` |
 | 009 | `pos_order_items` | Item per order, snapshot nama dan harga saat transaksi |
-| 010 | `midtrans_payments` | Record pembayaran Midtrans, menyimpan transaction ID, timestamp, status, dan nominal |
-| 011 | `webhook_events` | Log semua notifikasi masuk dari Midtrans |
+| 010 | `xendit_payments` | Record pembayaran Xendit. Menyimpan `xendit_account_id` (sub-account `for-user-id`), `xendit_invoice_id`, `xendit_charge_id`, `payment_method`, `amount`, `status`, dan `raw_payload` JSONB. Migration ini juga drop tabel lama `midtrans_payments` (peninggalan iterasi pre-Xendit). |
+| 011 | `webhook_events` | Log semua notifikasi masuk dari Xendit |
 | 012 | `admin_audit_logs` | Audit trail aksi admin |
+| 013 | `operators` (alter) | Tambah `operator_code` untuk login kasir |
 
 **Aturan penting:**
 - `product_name` dan `unit_price` di `pos_order_items` adalah snapshot — disimpan saat transaksi terjadi, bukan FK ke produk. Ini menjaga akurasi data historis jika produk diedit atau dihapus.
-- `midtrans_server_key` di tabel `businesses` harus dienkripsi di level aplikasi sebelum disimpan.
+- `xendit_secret_key` di tabel `businesses` harus dienkripsi di level aplikasi sebelum disimpan.
+- `qm_id` di-generate di application layer (`platform/qmid`) dengan format `QM-NNNNNN`. Generator wajib dipanggil di dalam tx yang sama dengan INSERT businesses, dan menggunakan `SELECT … FOR UPDATE` untuk row-level lock.
 - Semua tabel menggunakan `UUID PRIMARY KEY DEFAULT gen_random_uuid()`.
 - Setiap tabel baru butuh index pada foreign key dan kolom yang sering di-query.
 - Gunakan soft delete (`deleted_at`) untuk data yang punya histori transaksi.
-- Tidak ada data midtrans_payments yang boleh hilang meski webhook terlambat masuk.
+- Tidak ada data xendit_payments yang boleh hilang meski webhook terlambat masuk.
+
+### Onboarding Flow (Register)
+
+`POST /auth/register` mengeksekusi atomic transaction berikut:
+
+1. `BEGIN` (isolation `SERIALIZABLE`)
+2. INSERT `users`
+3. Generate `qm_id` via `platform/qmid.Generate(tx)` — `SELECT qm_id FROM businesses ORDER BY qm_id DESC LIMIT 1 FOR UPDATE`
+4. INSERT `businesses` dengan `xendit_status = 'PENDING'`
+5. Call `payment.XenditService.CreateManagedAccount` → `POST {XENDIT_BASE_URL}/v2/accounts` (Basic auth, `type: "MANAGED"`, `public_profile.business_name`)
+6. UPDATE `businesses` set `xendit_account_id`, `xendit_api_key`, `xendit_secret_key`, `xendit_status = 'REGISTERED'`
+7. `COMMIT`
+
+Kalau step 5 atau 6 gagal, seluruh tx di-rollback. Step 5 adalah external network call di tengah tx — orphaned Xendit sub-account dimungkinkan kalau commit DB gagal *setelah* call sukses; reconcile via job, bukan inline.
+
+Lifecycle `xendit_status`: `PENDING` → `REGISTERED` (post-account creation, KYC belum selesai) → `ACTIVE` (webhook `account.activated`) → opsional `SUSPENDED`.
 
 ---
 
@@ -220,7 +239,7 @@ Setiap perubahan endpoint **harus diupdate di `docs/api.yaml` terlebih dahulu** 
 
 | ID | User Story | Requirement |
 |----|------------|-------------|
-| C-01 | Owner bisa daftar dan masuk dengan aman dan cepat | Sistem mendukung registrasi email/password dan login Google OAuth. JWT digunakan untuk sesi autentikasi |
+| C-01 | Owner bisa daftar dan masuk dengan aman dan cepat | Sistem mendukung login email/password dan Google OAuth. JWT digunakan untuk sesi autentikasi |
 | C-02 | Sesi tetap aktif selama masih pakai aplikasi | Access token di-refresh otomatis selama sesi aktif, expired kalau idle terlalu lama |
 | C-03 | Bisa reset password kalau lupa | Flow reset password via email dengan token yang expire dalam 1 jam |
 
@@ -228,58 +247,66 @@ Setiap perubahan endpoint **harus diupdate di `docs/api.yaml` terlebih dahulu** 
 
 | ID | User Story | Requirement |
 |----|------------|-------------|
-| C-04 | Lihat kondisi bisnis begitu buka aplikasi | Dashboard menampilkan ringkasan: total pemasukan, pengeluaran, profit bersih, dan jumlah transaksi dalam periode yang bisa dipilih |
+| C-04 | Lihat kondisi bisnis begitu buka aplikasi | Dashboard menampilkan ringkasan: total revenue, jumlah transaksi, AOV, dan transaksi gagal/pending dalam periode yang bisa dipilih |
 | C-05 | Tahu tren bisnis naik atau turun dibanding periode sebelumnya | Dashboard menampilkan perbandingan period-over-period dengan indikator visual (naik/turun/stabil) |
-| C-06 | Lihat aktivitas transaksi terbaru tanpa buka halaman lain | Widget recent transactions di dashboard menampilkan 5-10 transaksi terakhir secara real-time |
+| C-06 | Lihat tren revenue 7 hari dan peak hours | Chart tren harian dan distribusi transaksi per jam tersedia di dashboard |
 
-#### Manajemen Transaksi
-
-| ID | User Story | Requirement |
-|----|------------|-------------|
-| C-07 | Catat transaksi masuk dan keluar dengan cepat | Form input transaksi minimal: nominal, kategori, tanggal, keterangan opsional. Selesai dalam < 30 detik |
-| C-08 | Transaksi otomatis terkategorisasi | Sistem menyediakan kategori default yang bisa dikustomisasi. AI pattern recognition untuk auto-kategorisasi berdasarkan histori |
-| C-09 | Bisa edit atau hapus transaksi yang salah input | Setiap transaksi bisa diedit atau dihapus dengan audit trail yang tercatat |
-| C-10 | Lihat semua transaksi dengan filter yang fleksibel | Filter berdasarkan tanggal, kategori, nominal range, dan status. Hasil bisa diexport |
-
-#### Order & Invoice
+#### Manajemen Produk
 
 | ID | User Story | Requirement |
 |----|------------|-------------|
-| C-11 | Buat invoice untuk pelanggan langsung dari QIOS | Form pembuatan invoice dengan field: nama pelanggan, item, jumlah, harga, dan due date |
-| C-12 | Invoice bisa dibayar langsung via payment gateway | Setiap invoice bisa di-generate payment link yang terhubung ke Midtrans |
-| C-13 | Tahu status pembayaran invoice secara real-time | Status invoice terupdate otomatis: pending, paid, overdue. Notifikasi masuk kalau ada pembayaran berhasil |
-| C-14 | Lihat semua order dan riwayat transaksi pelanggan | Halaman order management menampilkan list semua order dengan status dan histori per pelanggan |
+| C-07 | Tambah dan kelola katalog produk | Form tambah produk: nama, harga, kategori, deskripsi. Edit dan hapus tersedia |
+| C-08 | Produk yang dihapus tidak merusak data historis | Soft delete — produk tetap terbaca di transaksi lama meski sudah dihapus dari katalog |
+| C-09 | Filter produk berdasarkan kategori atau nama | Query parameter `category` dan `q` tersedia di `GET /products` |
 
-#### Inventory (TBD — Post-MVP)
+#### Transaksi & History
 
 | ID | User Story | Requirement |
 |----|------------|-------------|
-| C-18 | Stok terhubung ke transaksi penjualan | Setiap transaksi penjualan yang tercatat otomatis mengurangi stok item yang relevan |
+| C-10 | Lihat semua transaksi dengan filter fleksibel | Filter berdasarkan tanggal, status (pending/paid/failed/expired), pagination 20/page |
+| C-11 | Lihat detail satu transaksi termasuk item-itemnya | `GET /transactions/{id}` mengembalikan detail lengkap termasuk snapshot produk |
 
-### Payment Gateway (Midtrans)
+#### Statistics
 
-Semua interaksi antara QIOS dan Midtrans harus reliable, aman, dan tidak butuh intervensi manual dari user maupun admin.
+| ID | User Story | Requirement |
+|----|------------|-------------|
+| C-12 | Lihat produk terlaris dalam periode tertentu | `GET /dashboard/products/top` dengan filter period dan limit |
+| C-13 | Lihat tren transaksi harian dalam rentang waktu custom | `GET /dashboard/transactions/trend` dengan `start_date` dan `end_date` |
+
+#### AI Analytics
+
+| ID | User Story | Requirement |
+|----|------------|-------------|
+| C-14 | Dapat insight otomatis dari data bisnis | `GET /insight` mengembalikan insight cards rule-based — MVP minimal 3-5 tipe insight |
+| C-15 | Insight bisa di-expand untuk lihat data pendukung | Setiap insight card punya tombol "Lihat Data" yang expand ke breakdown relevan |
+
+#### Operator Management
+
+| ID | User Story | Requirement |
+|----|------------|-------------|
+| C-16 | Tambah dan kelola akun kasir | Owner bisa CRUD operator via `/business/operators` |
+| C-17 | Jumlah operator dibatasi sesuai plan | Slot operator dinamis dari plan, fallback 3, -1 = unlimited |
+
+### Payment Gateway (Xendit)
 
 | ID | Story | Requirement |
 |----|-------|-------------|
-| PG-01 | Sistem harus bisa generate payment link untuk setiap invoice | QIOS memanggil Midtrans API untuk membuat transaksi baru dan mengembalikan payment URL ke user |
-| PG-02 | Status pembayaran harus terupdate otomatis tanpa user harus refresh manual | Midtrans mengirim webhook notification ke QIOS setiap ada perubahan status transaksi. QIOS memproses dan mengupdate status invoice accordingly |
-| PG-03 | Sistem harus handle payment yang gagal atau expired dengan benar | Jika transaksi expired atau gagal, status invoice diupdate ke `failed`/`expired`. User bisa generate ulang payment link |
-| PG-04 | Semua data transaksi payment harus tersimpan dan bisa di-audit | Setiap transaksi Midtrans disimpan dengan transaction ID, timestamp, status, dan nominal. Tidak ada data yang hilang meski webhook terlambat masuk |
-| PG-05 | Sistem harus aman dari manipulasi webhook palsu | Validasi signature key pada setiap webhook request dari Midtrans sebelum diproses |
+| PG-01 | Sistem generate QR untuk setiap transaksi kasir | QIOS buat `order_id` unik, QR static Xendit merchant ditampilkan ke pembeli |
+| PG-02 | Status pembayaran terupdate otomatis | Xendit kirim webhook ke QIOS, server update status transaksi accordingly |
+| PG-03 | Sistem handle payment gagal atau expired dengan benar | Status diupdate ke `failed`/`expired`. Operator bisa buat order baru |
+| PG-04 | Semua data transaksi payment tersimpan dan bisa di-audit | Setiap transaksi Xendit disimpan lengkap di `xendit_payments` |
+| PG-05 | Sistem aman dari manipulasi webhook palsu | Validasi signature key Xendit wajib sebelum webhook diproses |
 
 ### Administrator (Internal Skalar Solutions)
 
-Pengelola platform butuh visibilitas dan kontrol penuh atas kesehatan sistem tanpa harus masuk langsung ke database atau server.
-
 | ID | Story | Requirement |
 |----|-------|-------------|
-| A-01 | Admin harus bisa monitor jumlah user aktif dan pertumbuhan registrasi | Dashboard admin menampilkan metrik: total user, user aktif (DAU/MAU), registrasi baru per periode |
-| A-02 | Admin harus bisa lihat status semua transaksi payment yang berjalan | Admin panel menampilkan log transaksi Midtrans across all users dengan filter status dan rentang waktu |
-| A-03 | Admin harus bisa suspend atau nonaktifkan akun user yang bermasalah | Fungsi suspend/unsuspend user tersedia di admin panel dengan audit log siapa yang melakukan dan kapan |
-| A-04 | Admin harus bisa monitor kesehatan server dan database secara real-time | Integrasi monitoring (uptime, response time, error rate) yang bisa diakses dari admin panel atau tools eksternal |
-| A-05 | Admin harus bisa manage subscription dan plan user | Admin bisa lihat plan aktif tiap user, ubah plan, dan extend atau terminate subscription secara manual |
-| A-06 | Semua aksi admin harus tercatat dalam audit log | Setiap aksi yang dilakukan admin (suspend, edit plan, akses data) tercatat dengan timestamp dan identity admin yang melakukan |
+| A-01 | Monitor jumlah user aktif dan pertumbuhan registrasi | Dashboard admin: total user, DAU/MAU, registrasi baru per periode |
+| A-02 | Lihat status semua transaksi payment | Log transaksi Xendit across all users dengan filter |
+| A-03 | Suspend atau nonaktifkan akun bermasalah | Fungsi suspend/unsuspend dengan audit log |
+| A-04 | Monitor kesehatan server dan database | Integrasi monitoring: uptime, response time, error rate |
+| A-05 | Manage subscription dan plan user | Admin bisa lihat, ubah, extend, atau terminate plan |
+| A-06 | Semua aksi admin tercatat | Audit log dengan timestamp dan identity admin |
 
 ---
 
@@ -287,7 +314,7 @@ Pengelola platform butuh visibilitas dan kontrol penuh atas kesehatan sistem tan
 
 ### Login Page
 
-Pintu masuk tunggal ke seluruh ekosistem QIOS. Satu akun = satu bisnis. Tidak ada registrasi publik di MVP, onboarding dilakukan manual atau via invite.
+Pintu masuk tunggal ke seluruh ekosistem QIOS. Tidak ada registrasi publik di MVP, onboarding dilakukan manual atau via invite.
 
 **UI Elements:**
 - Logo QIOS
@@ -297,64 +324,58 @@ Pintu masuk tunggal ke seluruh ekosistem QIOS. Satu akun = satu bisnis. Tidak ad
 - Tidak ada "Lupa Password" pada MVP
 
 **Teknikal:**
-- `POST /auth/login` dari API contract
-- Response: JWT token, simpan di httpOnly cookie atau localStorage (ikut keputusan API contract)
+- `POST /auth/login`
 - Redirect ke `/dashboard` setelah sukses
 - Route guard: kalau sudah login, `/login` redirect ke `/dashboard`
-- Next.js: `app/(auth)/login/page.tsx`
+- Next.js: `app/(dashboard)/login/page.tsx`
 
 ### Sidebar
 
-Navigasi utama untuk owner/operator yang akses dashboard. Harus jelas, tidak overcrowded, mencerminkan hierarki fitur QIOS.
+Navigasi utama untuk owner yang akses dashboard.
 
 **UI Elements:**
 - Logo QIOS
-- Menu Items: Dashboard (icon: grid/home), Analytics (icon: bar chart), AI Insight (icon: spark/brain), Divider, Settings (icon: gear) — Placeholder MVP
-- User Info (di bottom): Nama Bisnis, Avatar, Logout
+- Menu Items: Dashboard, Statistics, AI Analytics, History, Operators
+- User Info (bottom): Nama Bisnis, Avatar, Logout
 - Collapsible (Desktop), Drawer (Mobile)
 
 **Teknikal:**
 - Komponen global di `app/(dashboard)/layout.tsx`
 - Active state dari `usePathname()`
 - Logout: clear token, redirect ke `/login`
-- Tidak perlu role-based di MVP (satu user = satu bisnis)
 
 ### Dashboard
 
-Halaman pertama setelah login. Tujuannya satu: kasih owner gambaran kondisi bisnis hari ini dan 7 hari terakhir dalam hitungan detik. Snapshot, bukan analisis mendalam.
+Snapshot kondisi bisnis. Tujuan: kasih owner gambaran kondisi bisnis hari ini dan 7 hari terakhir dalam hitungan detik.
 
 **UI Elements:**
-- Metric Cards: Total Revenue (dengan delta % vs periode sebelumnya), Jumlah Transaksi, Average Order Value, Transaksi Berhasil vs Gagal/Pending
-- Chart: Revenue trend 7 hari terakhir (line chart), Jam tersibuk hari ini (bar chart horizontal — skip kalau data belum cukup)
+- Metric Cards: Total Revenue (delta % vs periode sebelumnya), Jumlah Transaksi, Average Order Value, Transaksi Gagal/Pending
+- Chart: Revenue trend 7 hari terakhir (line chart), Peak hours (bar chart horizontal)
 - List: Top 5 produk terlaris (nama + jumlah terjual)
 
 **Teknikal:**
-- Endpoint: `GET /analytics/summary`
-- Data fetching: Server Component atau `useEffect` + loading skeleton
-- Chart library: **Recharts** (ringan, kompatibel Next.js)
-- Timeframe filter: toggle "Hari Ini / 7 Hari" di header section, bukan full date picker
+- Endpoints: `GET /dashboard/summary`, `GET /dashboard/transactions/trend`, `GET /dashboard/transactions/peak-hours`, `GET /dashboard/products/top?limit=5`
+- Chart library: Recharts
+- Timeframe filter: toggle "Hari Ini / 7 Hari" di header
 - Next.js: `app/(dashboard)/dashboard/page.tsx`
 
-### Analytics
+### Statistics
 
-Detailed view untuk owner yang mau deep dive. User pilih timeframe dan breakdown sendiri. Target: evaluasi performa mingguan/bulanan sebelum ambil keputusan stok atau promo.
+Deep dive performa produk dan tren transaksi. Target: evaluasi mingguan/bulanan sebelum ambil keputusan.
 
 **UI Elements:**
 - Filter Bar: Date range picker dengan preset (7 hari, 30 hari, 3 bulan) + custom range
-- Section 1 — Revenue Overview: Line chart revenue over time, total revenue + jumlah transaksi
-- Section 2 — Transaksi Breakdown: Bar chart volume per hari, status breakdown (berhasil/gagal/pending)
-- Section 3 — Product Performance: Tabel nama produk, jumlah terjual, kontribusi revenue (sortable)
-- Section 4 — Perbandingan Periode: Toggle bandingkan dengan periode sebelumnya, delta indicator per metric
+- Section 1 — Tren Transaksi: Line chart revenue over time + volume per hari
+- Section 2 — Produk Terlaris: Tabel nama produk, jumlah terjual, kontribusi revenue (sortable)
+- Section 3 — Perbandingan Periode: Toggle bandingkan dengan periode sebelumnya
 
 **Teknikal:**
-- Endpoint: `GET /analytics/transactions?from=&to=`
-- Date range: `react-day-picker` atau native input, hindari heavy library
-- Tabel: plain HTML table dengan Tailwind, tidak perlu data grid library di MVP
-- Next.js: `app/(dashboard)/analytics/page.tsx`
+- Endpoints: `GET /dashboard/transactions/trend`, `GET /dashboard/products/top`
+- Next.js: `app/(dashboard)/statistics/page.tsx`
 
-### AI Insight
+### AI Analytics
 
-Bukan chatbot. QIOS ngomong duluan berdasarkan data bisnis owner. Tujuannya: kasih rekomendasi atau observasi yang actionable tanpa owner harus nanya.
+QIOS ngomong duluan berdasarkan data bisnis owner. Insight otomatis, bukan chatbot.
 
 **Format: Insight Card.** Tiap card berisi:
 - Icon kategori (tren, peringatan, peluang)
@@ -365,35 +386,60 @@ Bukan chatbot. QIOS ngomong duluan berdasarkan data bisnis owner. Tujuannya: kas
 
 **Contoh konten:**
 - "Hari Selasa merupakan hari terkuat secara konsisten. Rata-rata revenue hari Selasa 38% di atas hari lain dalam 30 hari terakhir."
-- "Tiga produk tidak mencatat penjualan selama 14 hari terakhir. Direkomendasikan untuk meninjau ulang stok atau penetapan harga item ini."
-- "Waktu puncak transaksi adalah 12.00–14.00. Periode ini berkontribusi sebesar 41% dari total transaksi harian."
+- "Tiga produk tidak mencatat penjualan selama 14 hari terakhir."
+- "Waktu puncak transaksi adalah 12.00–14.00. Berkontribusi 41% dari total transaksi harian."
 
 **Teknikal:**
 - Endpoint: `GET /insight`
-- MVP: insight semi-hardcoded logic di backend (rule-based), bukan LLM. LLM bisa dicolok nanti ke endpoint yang sama tanpa perubahan frontend
+- MVP: rule-based logic di backend, bukan LLM. LLM bisa dicolok post-MVP ke endpoint yang sama
 - Frontend hanya render response, tidak ada logika AI di client
-- Expand "Lihat Data": fetch breakdown spesifik per insight type, atau sudah diinclude dalam response payload
-- Refresh: manual button atau auto setiap buka halaman
-- Next.js: `app/(dashboard)/insight/page.tsx`
 - State: loading skeleton per card, empty state kalau data belum cukup ("Insight akan muncul setelah 7 hari transaksi")
+- Next.js: `app/(dashboard)/analytics/page.tsx`
 
-### Kasir (Follow Through — Mobile PWA)
+### History
 
-Interface untuk operator di lapangan. Mobile-first dari awal. PWA conversion dilakukan post-MVP.
+List semua transaksi raw dengan filter. Reference point untuk owner kalau perlu trace transaksi spesifik.
+
+**UI Elements:**
+- Filter: Date range, status (pending/paid/failed/expired)
+- Tabel: order_id, tanggal, total, status, operator
+- Pagination (20/page)
+- Klik baris → detail transaksi (modal atau halaman baru)
+
+**Teknikal:**
+- Endpoints: `GET /transactions`, `GET /transactions/{id}`
+- Next.js: `app/(dashboard)/history/page.tsx`
+
+### Operators
+
+CRUD akun kasir milik bisnis. Owner kelola dari sini, operator tidak punya akses ke halaman ini.
+
+**UI Elements:**
+- List operator aktif: nama, email, tanggal dibuat
+- Tombol "Tambah Operator" → form (nama, email, password)
+- Tombol hapus per operator → konfirmasi dialog
+- Info slot: "X dari Y slot terpakai" sesuai plan
+
+**Teknikal:**
+- Endpoints: `GET /business/operators`, `POST /business/operators`, `DELETE /business/operators/{id}`
+- Next.js: `app/(dashboard)/operators/page.tsx`
+
+### Kasir (Mobile PWA)
+
+Interface untuk operator di lapangan. Mobile-first dari awal.
 
 **Scope MVP:**
-- Input transaksi/order baru
-- Generate QR Midtrans static dengan unique `order_id`
-- Tampil status pembayaran (polling atau webhook-driven)
-- Riwayat transaksi hari ini (list sederhana)
+- Input order baru, pilih produk dari katalog
+- Generate QR Xendit static dengan unique `order_id`
+- Tampil status pembayaran
+- Riwayat transaksi hari ini
 
 **API yang dicolok:**
-- `POST /orders` — buat order baru
-- `GET /orders/:id` — cek status
-- `POST /payments/initiate` — generate QR Midtrans
-- `GET /payments/:id/status` — cek status pembayaran
+- `POST /transactions` — buat order baru
+- `GET /transactions/{id}` — cek status
+- `GET /products` — load katalog produk
 
-**Catatan untuk Dev:** Build `/kasir` sebagai route biasa dalam Next.js. Pastikan layout sudah mobile-first dan tidak ada dependency yang block PWA conversion nanti. Jangan implement service worker dulu.
+**Catatan untuk Dev:** Build `/kasir` sebagai route biasa dalam Next.js. Layout mobile-first, tidak ada dependency yang block PWA conversion nanti. Jangan implement service worker dulu.
 
 ---
 
@@ -412,8 +458,9 @@ Semua env vars dibaca via `config.Load()` di startup. Tidak ada `os.Getenv()` la
 | `JWT_SECRET` | Secret untuk sign JWT | — |
 | `JWT_ACCESS_EXPIRY` | Durasi access token | `15m` |
 | `JWT_REFRESH_EXPIRY` | Durasi refresh token | `720h` |
-| `MIDTRANS_SERVER_KEY` | Server key Midtrans global (fallback) | — |
-| `MIDTRANS_ENV` | `sandbox` atau `production` | `sandbox` |
+| `XENDIT_SECRET_KEY` | Master secret key Xendit (xenPlatform). Dipakai untuk Basic auth saat membuat sub-account dan operasi platform-level. **Wajib di-set** — startup gagal kalau kosong. | — |
+| `XENDIT_ENV` | `sandbox` atau `production` | `sandbox` |
+| `XENDIT_BASE_URL` | Override base URL Xendit (untuk testing/staging) | `https://api.xendit.io` |
 
 Buat file `.env` di `apps/server/` untuk local development. File ini tidak boleh di-commit — sudah ada di `.gitignore`.
 
@@ -482,8 +529,10 @@ Client berjalan di `http://localhost:3000`, server di `http://localhost:8080`.
 ### Week 2 — Core Pages Static
 
 **Backend:**
-1. Order domain: `POST /orders`, `GET /orders`, `GET /orders/:id`
-2. Payment domain: Midtrans QR initiation
+1. Transaction domain: `POST /transactions`, `GET /transactions`, `GET /transactions/{id}`
+2. Product domain: `GET /products`, `POST /products`, `PATCH /products/{id}`, `DELETE /products/{id}`
+3. Operator domain: `GET /business/operators`, `POST /business/operators`, `DELETE /business/operators/{id}`
+4. Payment domain: Xendit connect + webhook skeleton
 
 **Frontend Developer 1 — Login + Auth:**
 1. Connect login ke `POST /auth/login`
@@ -501,47 +550,45 @@ Client berjalan di `http://localhost:3000`, server di `http://localhost:8080`.
 ### Week 3 — Data Integration
 
 **Backend:**
-1. Analytics endpoints: summary, transaksi breakdown
-2. Insight logic: rule-based, minimal 3-5 insight types
+1. Dashboard endpoints: summary, trend, peak-hours
+2. Statistic endpoint: products/top
+3. Analytic logic: rule-based, minimal 3-5 insight types
 
-**Frontend Developer 1 — Analytics:**
-1. Analytics page: date filter, charts, tabel produk
+**Frontend Developer 1 — Statistics + History:**
+1. Statistics page: date filter, charts, tabel produk
+2. History page: tabel transaksi + filter
 
 **Frontend Developer 2 — Dashboard Live:**
 1. Swap mock data ke API real
 2. Loading skeleton, error state
 
 **Frontend Developer 3 — Kasir Live:**
-1. Connect ke `POST /orders` + Midtrans QR
+1. Connect ke `POST /transactions` + load produk
 2. Status payment polling
 
-### Week 4 — Insight + Polish
+### Week 4 — AI Analytics + Polish
 
 **Backend:**
-1. Insight endpoint live
+1. Insight endpoint live (`GET /insight`)
 2. Error handling, response consistency
 
-**Frontend Developer 1 — AI Insight:**
-1. Insight page: render insight cards
+**Frontend Developer 1 — AI Analytics:**
+1. AI Analytics page: render insight cards
 2. Empty state, loading skeleton
 
 **Frontend Developer 2 & 3 — Cross-polish:**
-1. Responsive check semua halaman
-2. Edge cases: empty data, error state, token expired
+1. Operators page: CRUD full
+2. Responsive check semua halaman
+3. Edge cases: empty data, error state, token expired
 
-### Week 5 — Integration Testing + Bug Fix
+### Week 5-6 — Integration Testing + Buffer
 
 1. Full flow testing end-to-end
 2. FE + BE sync untuk edge cases
-3. Performance check (loading time, chart render)
-4. Staging deploy (Hostinger/Biznet GioCloud)
-
-### Week 6 — Buffer + MVP Finalization
-
-1. Fix issues dari testing
-2. Final QA
-3. Demo-ready build
-4. Dokumentasi minimal (README update, env setup)
+3. Performance check
+4. Staging deploy (Vercel + Railway)
+5. Fix issues dari testing
+6. Final QA + demo-ready build
 
 ---
 
@@ -558,17 +605,16 @@ Client berjalan di `http://localhost:3000`, server di `http://localhost:8080`.
 feature/<nama> → dev → main
 ```
 
-Tidak ada pengecualian. Hotfix pun harus lewat branch sendiri.
-
 ### Naming Branch
 
 ```
 feature/auth-login
 feature/kasir-product-list
 feature/dashboard-summary
-feature/invoice-management
-feature/analytics-breakdown
-feature/insight-cards
+feature/statistics-breakdown
+feature/analytics-insight-cards
+feature/history-transactions
+feature/operators-crud
 fix/webhook-signature-validation
 chore/update-dependencies
 ```
@@ -579,11 +625,11 @@ Format: `<type>: <deskripsi singkat>`
 
 ```
 feat: tambah endpoint POST /auth/login
-feat: tambah invoice domain dengan Midtrans integration
+feat: tambah transaction domain
 fix: perbaiki race condition di webhook handler
-fix: validasi signature key Midtrans di webhook endpoint
+fix: validasi signature key Xendit di webhook endpoint
 chore: update go dependencies
-docs: update api.yaml dengan domain payment dan invoice
+docs: update qios-api.yaml dengan domain product dan transaction
 refactor: pisahkan auth service dari handler
 ```
 
@@ -627,9 +673,9 @@ refactor: pisahkan auth service dari handler
 
 ### Security
 
-- `midtrans_server_key` harus dienkripsi sebelum disimpan ke database
+- `xendit_secret_key` harus dienkripsi sebelum disimpan ke database
 - Refresh token disimpan sebagai hash, bukan plain text
-- Validasi signature Midtrans wajib dijalankan sebelum memproses webhook (requirement PG-05)
+- Validasi signature Xendit wajib dijalankan sebelum memproses webhook (requirement PG-05)
 - Tidak ada secret atau credential yang di-commit ke repository
 
 ---
@@ -637,15 +683,16 @@ refactor: pisahkan auth service dari handler
 ## Yang Belum Final (Pending)
 
 - Seed data `plans` dan `subscriptions` — tunggu konfirmasi pricing dari board
-- Konfirmasi ke Midtrans: apakah item detail per transaksi tersedia via API atau webhook
+- Konfirmasi ke Xendit: apakah item detail per transaksi tersedia via API atau webhook
 - Flutter vs PWA untuk jangka panjang — MVP tetap PWA Android
 - Inventory management (C-18) — dijadwalkan post-MVP, schema belum final
+- LLM integration untuk AI Analytics — dijadwalkan post-MVP
 
 ---
 
 ## Dokumen Terkait
 
-- `docs/api.yaml` — OpenAPI 3.0.3 contract lengkap
+- `docs/qios-api.yaml` — OpenAPI 3.0.3 contract lengkap
 - `AGENTS.md` (root) — panduan umum untuk AI agents
 - `apps/server/AGENTS.md` — panduan implementasi spesifik server
 - PRD QIOS — dokumen product requirement lengkap (source of truth untuk product decisions)

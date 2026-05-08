@@ -21,8 +21,15 @@ type Service struct {
 	refreshExpiry time.Duration
 }
 
+// Role constants — dipakai oleh middleware untuk gating.
+const (
+	RoleOwner    = "owner"
+	RoleOperator = "operator"
+)
+
 type Claims struct {
 	UserID     string `json:"user_id"`
+	OperatorID string `json:"operator_id,omitempty"`
 	BusinessID string `json:"business_id"`
 	Role       string `json:"role"`
 	jwt.RegisteredClaims
@@ -47,11 +54,32 @@ func NewService(cfg *config.Config) (*Service, error) {
 }
 
 // IssueAccessToken membuat access token JWT untuk user.
+// Dipakai owner login dan refresh — role bebas, OperatorID kosong.
 func (s *Service) IssueAccessToken(userID, businessID, role string) (string, error) {
 	claims := Claims{
 		UserID:     userID,
 		BusinessID: businessID,
 		Role:       role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.accessExpiry)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(s.secret)
+}
+
+// IssueOperatorAccessToken membuat access token khusus operator.
+// UserID diisi operatorID juga — kompatibel dengan refresh handler yang
+// melakukan lookup berbasis user_id (mengikuti pola lama).
+// OperatorID di-set eksplisit supaya handler bisa baca lewat context.
+func (s *Service) IssueOperatorAccessToken(operatorID, businessID string) (string, error) {
+	claims := Claims{
+		UserID:     operatorID,
+		OperatorID: operatorID,
+		BusinessID: businessID,
+		Role:       RoleOperator,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.accessExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

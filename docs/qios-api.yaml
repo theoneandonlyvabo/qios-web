@@ -4,9 +4,9 @@ info:
   title: QIOS API
   description: >
     API contract antara client (Next.js) dan server (Go + Echo) untuk platform QIOS.
-    QIOS adalah business intelligence layer di atas sistem pembayaran Midtrans.
+    QIOS adalah business intelligence layer di atas sistem pembayaran Xendit Platform.
     Dua role utama: owner (akses dashboard) dan operator (akses interface kasir).
-  version: 0.2.0
+  version: 0.3.0
   contact:
     name: QIOS Development Team
 
@@ -351,14 +351,20 @@ paths:
   # ----------------------------------------------------------
   # OPERATOR
   # ----------------------------------------------------------
+  #
+  # Owner mengelola operator dari /business/operators.
+  # Operator (kasir) login dari /kasir/auth/login atau /kasir/auth/login/qr.
+  # Login operator menggunakan operator_code (per-business) atau qr_token (global).
 
   /business/operators:
     get:
       tags: [Operator]
       summary: List semua operator bisnis
       description: >
-        Mengembalikan daftar akun operator yang terdaftar di bisnis ini.
+        Mengembalikan daftar akun operator yang terdaftar di bisnis ini
+        beserta info kuota slot dari plan aktif.
         Hanya bisa diakses oleh owner.
+        qr_token tidak dikembalikan di endpoint list — hanya saat create dan regenerate.
       security:
         - BearerAuth: []
       responses:
@@ -369,17 +375,24 @@ paths:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
+                  success: { type: boolean, example: true }
                   data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Operator'
+                    type: object
+                    properties:
+                      operators:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Operator'
+                      slot_used:
+                        type: integer
+                        example: 2
+                      slot_max:
+                        type: integer
+                        description: -1 berarti unlimited
+                        example: 3
                   error:
                     type: string
                     nullable: true
-                    example: null
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -390,8 +403,10 @@ paths:
       summary: Tambah operator baru
       description: >
         Membuat akun operator baru untuk bisnis ini.
-        Hanya bisa dilakukan oleh owner.
-        Operator tidak bisa login via Google, hanya email + password.
+        Sistem akan generate qr_token random — disertakan sekali pada response
+        ini sebagai bahan untuk QR code, dan tidak akan muncul lagi di endpoint list.
+        Cap slot operator divalidasi terhadap max_operators dari plan aktif
+        (fallback 3, -1 berarti unlimited).
       security:
         - BearerAuth: []
       requestBody:
@@ -400,15 +415,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, email, password]
+              required: [name, operator_code, password]
               properties:
                 name:
                   type: string
                   example: Siti Kasir
-                email:
+                operator_code:
                   type: string
-                  format: email
-                  example: kasir@warungbudi.com
+                  description: ID login human-readable, unik per-bisnis. 3-64 karakter alfanumerik / dash / underscore.
+                  example: kasir-1
                 password:
                   type: string
                   format: password
@@ -421,46 +436,134 @@ paths:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
+                  success: { type: boolean, example: true }
                   data:
-                    $ref: '#/components/schemas/Operator'
+                    $ref: '#/components/schemas/OperatorWithSecret'
                   error:
                     type: string
                     nullable: true
-                    example: null
+        '400':
+          description: Input tidak valid (operator_code format salah, password terlalu pendek, dll)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Email operator sudah terdaftar
+          description: operator_code sudah dipakai di bisnis ini, atau slot operator penuh
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                success: false
-                data: null
-                error: Email sudah terdaftar sebagai operator
+              examples:
+                code_taken:
+                  value:
+                    success: false
+                    data: null
+                    error: operator_code sudah digunakan di bisnis ini
+                limit_reached:
+                  value:
+                    success: false
+                    data: null
+                    error: Kuota operator pada plan saat ini sudah penuh
 
   /business/operators/{operator_id}:
-    delete:
+    parameters:
+      - name: operator_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
       tags: [Operator]
-      summary: Hapus operator
-      description: >
-        Menonaktifkan akun operator dari bisnis ini.
-        Hanya bisa dilakukan oleh owner.
+      summary: Detail satu operator
+      description: Mengembalikan detail operator. Tidak include qr_token.
       security:
         - BearerAuth: []
-      parameters:
-        - name: operator_id
-          in: path
-          required: true
-          schema:
-            type: string
-            example: opr_abc123
+      responses:
+        '200':
+          description: Operator ditemukan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/Operator'
+                  error:
+                    type: string
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Operator]
+      summary: Update operator
+      description: >
+        Partial update — hanya field yang dikirim yang berubah.
+        Field yang bisa diubah: name dan is_active.
+        Untuk reset password / regenerate QR pakai endpoint terpisah.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Siti Kasir Pagi
+                is_active:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Operator berhasil diupdate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/Operator'
+                  error:
+                    type: string
+                    nullable: true
+        '400':
+          description: Input tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Operator]
+      summary: Hapus operator (soft delete)
+      description: >
+        Menandai operator sebagai dihapus (soft delete).
+        Operator tidak bisa login lagi setelah dihapus, tapi data historis tetap terjaga.
+        operator_code bisa dipakai ulang setelah operator dihapus.
+      security:
+        - BearerAuth: []
       responses:
         '200':
           description: Operator berhasil dihapus
@@ -474,6 +577,157 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /business/operators/{operator_id}/regenerate-qr:
+    post:
+      tags: [Operator]
+      summary: Regenerate qr_token operator
+      description: >
+        Menerbitkan qr_token baru untuk operator. QR lama otomatis tidak valid
+        untuk login baru, tapi sesi JWT yang sudah aktif tetap berlaku sampai expiry.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: operator_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: QR token baru berhasil di-generate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/OperatorWithSecret'
+                  error:
+                    type: string
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # KASIR AUTH (operator login)
+  # ----------------------------------------------------------
+
+  /kasir/auth/login:
+    post:
+      tags: [Operator]
+      summary: Login operator dengan operator_code + password
+      description: >
+        Endpoint publik. Operator memasukkan business_id (atau slug yang diterjemahkan
+        di FE), operator_code, dan password. Mengembalikan access token JWT dengan
+        role "operator" dan claim operator_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business_id, operator_code, password]
+              properties:
+                business_id:
+                  type: string
+                  format: uuid
+                operator_code:
+                  type: string
+                  example: kasir-1
+                password:
+                  type: string
+                  format: password
+                  example: kasir123
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/OperatorLoginResponse'
+                  error:
+                    type: string
+                    nullable: true
+        '400':
+          description: Input tidak valid (business_id format, field kosong)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: operator_code atau password salah
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Akun operator dinonaktifkan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /kasir/auth/login/qr:
+    post:
+      tags: [Operator]
+      summary: Login operator dengan QR scan
+      description: >
+        Endpoint publik. Operator scan QR yang berisi qr_token statis,
+        device kirim qr_token ke endpoint ini. Mengembalikan access token JWT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qr_token]
+              properties:
+                qr_token:
+                  type: string
+                  example: 7p2lJpcG-Sx0n0XKqyYFBvOe1nXMyM-WQHrTAYYzvUI
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/OperatorLoginResponse'
+                  error:
+                    type: string
+                    nullable: true
+        '400':
+          description: qr_token kosong
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: qr_token tidak valid (sudah di-regenerate atau tidak ada)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Akun operator dinonaktifkan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   # ----------------------------------------------------------
   # PRODUCT
@@ -760,8 +1014,8 @@ paths:
       summary: Buat order baru dari interface kasir
       description: >
         Operator memilih produk di interface kasir, lalu endpoint ini
-        membuat order baru di sistem QIOS dan mengembalikan order_id
-        yang akan digunakan sebagai payment reference ke Midtrans.
+        membuat order baru di sistem QIOS, memanggil Xendit API untuk
+        generate QRIS, dan mengembalikan QR string untuk ditampilkan ke pembeli.
         Bisa dilakukan oleh owner maupun operator.
       security:
         - BearerAuth: []
@@ -860,16 +1114,16 @@ paths:
           $ref: '#/components/responses/NotFound'
 
   # ----------------------------------------------------------
-  # PAYMENT
+  # PAYMENT (XENDIT)
   # ----------------------------------------------------------
 
-  /payment/midtrans/connect:
+  /payment/xendit/connect:
     post:
       tags: [Payment]
-      summary: Hubungkan akun Midtrans bisnis
+      summary: Hubungkan akun Xendit bisnis
       description: >
-        Menyimpan Midtrans server key milik bisnis ke sistem QIOS.
-        Server key dienkripsi sebelum disimpan.
+        Menyimpan Xendit secret key milik bisnis ke sistem QIOS.
+        Secret key dienkripsi sebelum disimpan.
         Hanya bisa dilakukan oleh owner.
       security:
         - BearerAuth: []
@@ -879,14 +1133,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [server_key]
+              required: [secret_key]
               properties:
-                server_key:
+                secret_key:
                   type: string
-                  example: SB-Mid-server-xxxx
+                  example: xnd_development_xxxx
       responses:
         '200':
-          description: Midtrans berhasil dihubungkan
+          description: Xendit berhasil dihubungkan
           content:
             application/json:
               schema:
@@ -903,8 +1157,8 @@ paths:
                         example: true
                       masked_key:
                         type: string
-                        description: Server key yang di-mask untuk konfirmasi
-                        example: SB-Mid-server-xxxx...abcd
+                        description: Secret key yang di-mask untuk konfirmasi
+                        example: xnd_development_xxxx...abcd
                   error:
                     type: string
                     nullable: true
@@ -914,7 +1168,7 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '422':
-          description: Server key tidak valid
+          description: Secret key tidak valid
           content:
             application/json:
               schema:
@@ -922,14 +1176,14 @@ paths:
               example:
                 success: false
                 data: null
-                error: Server key Midtrans tidak valid
+                error: Secret key Xendit tidak valid
 
-  /payment/midtrans/status:
+  /payment/xendit/status:
     get:
       tags: [Payment]
-      summary: Cek status koneksi Midtrans
+      summary: Cek status koneksi Xendit
       description: >
-        Mengecek apakah bisnis sudah terhubung ke Midtrans.
+        Mengecek apakah bisnis sudah terhubung ke Xendit.
         Bisa diakses oleh owner maupun operator.
       security:
         - BearerAuth: []
@@ -953,7 +1207,7 @@ paths:
                       masked_key:
                         type: string
                         nullable: true
-                        example: SB-Mid-server-xxxx...abcd
+                        example: xnd_development_xxxx...abcd
                   error:
                     type: string
                     nullable: true
@@ -961,22 +1215,22 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /payment/midtrans/webhook:
+  /payment/xendit/webhook:
     post:
       tags: [Payment]
-      summary: Webhook notifikasi dari Midtrans
+      summary: Webhook notifikasi dari Xendit
       description: >
-        Endpoint yang dipanggil oleh Midtrans setiap kali ada perubahan
+        Endpoint yang dipanggil oleh Xendit setiap kali ada perubahan
         status transaksi. QIOS mengupdate status transaksi berdasarkan
-        notifikasi ini dan mencocokkan dengan order_id yang sudah ada.
+        notifikasi ini dan mencocokkan dengan reference_id yang sudah ada.
         Endpoint ini tidak memerlukan Bearer token, tapi diverifikasi
-        menggunakan signature key dari Midtrans.
+        menggunakan webhook token dari Xendit (header x-callback-token).
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MidtransWebhookPayload'
+              $ref: '#/components/schemas/XenditWebhookPayload'
       responses:
         '200':
           description: Webhook berhasil diproses
@@ -985,7 +1239,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SimpleSuccess'
         '400':
-          description: Payload tidak valid atau signature tidak cocok
+          description: Payload tidak valid atau token tidak cocok
           content:
             application/json:
               schema:
@@ -1177,6 +1431,44 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  # ----------------------------------------------------------
+  # INSIGHT (AI ANALYTICS)
+  # ----------------------------------------------------------
+
+  /insight:
+    get:
+      tags: [Insight]
+      summary: List insight rule-based dari data transaksi
+      description: >
+        Mengembalikan daftar insight otomatis yang di-generate dari data bisnis.
+        MVP menggunakan rule-based logic, bukan LLM.
+        Hanya bisa diakses oleh owner.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Insight berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InsightCard'
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 # ============================================================
 # COMPONENTS
 # ============================================================
@@ -1242,21 +1534,57 @@ components:
 
     Operator:
       type: object
+      description: >
+        Bentuk operator yang aman dikirim ke client. Tidak include
+        password_hash maupun qr_token.
       properties:
         id:
           type: string
-          example: opr_abc123
+          format: uuid
+        business_id:
+          type: string
+          format: uuid
         name:
           type: string
           example: Siti Kasir
-        email:
+        operator_code:
           type: string
-          format: email
-          example: kasir@warungbudi.com
+          description: ID login human-readable, unik per-bisnis.
+          example: kasir-1
+        is_active:
+          type: boolean
+          example: true
         created_at:
           type: string
           format: date-time
           example: "2025-04-01T08:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-04-01T08:00:00Z"
+
+    OperatorWithSecret:
+      type: object
+      description: >
+        Bentuk operator + qr_token. Hanya dikembalikan saat create dan
+        regenerate-qr — qr_token tidak diekspos di endpoint lain.
+      allOf:
+        - $ref: '#/components/schemas/Operator'
+        - type: object
+          properties:
+            qr_token:
+              type: string
+              description: Token statis url-safe base64 untuk di-encode ke QR.
+              example: 7p2lJpcG-Sx0n0XKqyYFBvOe1nXMyM-WQHrTAYYzvUI
+
+    OperatorLoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT dengan role "operator" dan claim operator_id.
+        operator:
+          $ref: '#/components/schemas/Operator'
 
     # --- Business ---
 
@@ -1276,9 +1604,9 @@ components:
           type: string
           nullable: true
           example: Kuliner
-        midtrans_connected:
+        xendit_connected:
           type: boolean
-          description: Apakah bisnis sudah terhubung ke Midtrans
+          description: Apakah bisnis sudah terhubung ke Xendit
           example: true
 
     # --- Product ---
@@ -1327,7 +1655,7 @@ components:
           example: trx_abc123
         order_id:
           type: string
-          description: ID unik yang dikirim ke Midtrans sebagai payment reference
+          description: ID unik yang dikirim ke Xendit sebagai reference_id
           example: QIOS-20250429-abc123
         total_amount:
           type: integer
@@ -1337,6 +1665,15 @@ components:
           type: string
           enum: [pending]
           example: pending
+        qr_string:
+          type: string
+          description: QR string dari Xendit untuk ditampilkan di kasir
+          example: "00020101021226..."
+        expires_at:
+          type: string
+          format: date-time
+          description: Waktu expired QR
+          example: "2025-04-29T10:45:00Z"
         items:
           type: array
           items:
@@ -1412,37 +1749,44 @@ components:
           type: integer
           example: 10000
 
-    # --- Payment ---
+    # --- Payment (Xendit) ---
 
-    MidtransWebhookPayload:
+    XenditWebhookPayload:
       type: object
-      description: Payload notifikasi dari Midtrans
+      description: Payload notifikasi dari Xendit (QRIS callback)
       properties:
-        transaction_id:
+        id:
           type: string
-          example: mid_trx_abc123
-        order_id:
+          description: ID unik event dari Xendit
+          example: xnd_pay_abc123
+        external_id:
           type: string
-          description: Cocokkan dengan order_id di sistem QIOS
+          description: Cocokkan dengan order_id di sistem QIOS (reference_id)
           example: QIOS-20250429-abc123
-        transaction_status:
+        status:
           type: string
-          enum: [capture, settlement, pending, deny, cancel, expire, refund]
-          example: settlement
-        payment_type:
+          enum: [PENDING, PAID, SETTLED, FAILED, EXPIRED, VOIDED]
+          example: PAID
+        payment_method:
           type: string
-          example: qris
-        gross_amount:
-          type: string
-          example: "25000.00"
-        signature_key:
-          type: string
-          description: Signature untuk verifikasi keaslian notifikasi
-          example: abc123def456...
-        transaction_time:
+          example: QRIS
+        amount:
+          type: integer
+          description: Nominal pembayaran dalam Rupiah
+          example: 25000
+        paid_at:
           type: string
           format: date-time
+          nullable: true
           example: "2025-04-29T10:32:00Z"
+        callback_token:
+          type: string
+          description: Token untuk verifikasi keaslian notifikasi (header x-callback-token)
+          example: abc123def456...
+        created:
+          type: string
+          format: date-time
+          example: "2025-04-29T10:30:00Z"
 
     # --- Dashboard ---
 
@@ -1523,6 +1867,32 @@ components:
           format: float
           description: Rata-rata transaksi per hari pada jam tersebut
           example: 6.4
+
+    # --- Insight ---
+
+    InsightCard:
+      type: object
+      properties:
+        id:
+          type: string
+          example: insight_abc123
+        type:
+          type: string
+          enum: [trend, warning, opportunity]
+          description: Kategori insight
+          example: trend
+        title:
+          type: string
+          description: Judul singkat insight, maks 10 kata
+          example: Selasa konsisten jadi hari terkuat bisnis lo
+        narrative:
+          type: string
+          description: Narasi 1-2 kalimat, bahasa natural
+          example: Rata-rata revenue hari Selasa 38% di atas hari lain dalam 30 hari terakhir.
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-04-29T06:00:00Z"
 
     # --- Shared ---
 

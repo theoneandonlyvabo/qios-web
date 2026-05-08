@@ -8,6 +8,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"os"
 
@@ -23,12 +25,16 @@ type Config struct {
 	DBPassword string
 	DBName     string
 
-	JWTSecret         string
-	JWTAccessExpiry   string
-	JWTRefreshExpiry  string
+	JWTSecret        string
+	JWTAccessExpiry  string
+	JWTRefreshExpiry string
 
-	MidtransServerKey string
-	MidtransEnv       string
+	// Xendit (xenPlatform). XenditSecretKey adalah master secret QIOS yang dipakai
+	// untuk membuat sub-account dan operasi platform-level lain. Setiap sub-account
+	// punya api_key/secret_key sendiri yang disimpan di tabel businesses.
+	XenditSecretKey string
+	XenditEnv       string // "sandbox" atau "production"
+	XenditBaseURL   string // override opsional, default https://api.xendit.io
 }
 
 func Load() *Config {
@@ -49,9 +55,32 @@ func Load() *Config {
 		JWTAccessExpiry:  getEnv("JWT_ACCESS_EXPIRY", "15m"),
 		JWTRefreshExpiry: getEnv("JWT_REFRESH_EXPIRY", "720h"),
 
-		MidtransServerKey: getEnv("MIDTRANS_SERVER_KEY", ""),
-		MidtransEnv:       getEnv("MIDTRANS_ENV", "sandbox"),
+		XenditSecretKey: getEnv("XENDIT_SECRET_KEY", ""),
+		XenditEnv:       getEnv("XENDIT_ENV", "sandbox"),
+		XenditBaseURL:   getEnv("XENDIT_BASE_URL", "https://api.xendit.io"),
 	}
+}
+
+// Validate memeriksa env var yang wajib ada saat startup.
+// Dipanggil di main setelah Load — gagal cepat lebih baik daripada panic di runtime.
+func (c *Config) Validate() error {
+	var missing []string
+	if c.JWTSecret == "" {
+		missing = append(missing, "JWT_SECRET")
+	}
+	if c.DBPassword == "" {
+		missing = append(missing, "DB_PASSWORD")
+	}
+	if c.XenditSecretKey == "" {
+		missing = append(missing, "XENDIT_SECRET_KEY")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("config: required env vars not set: %v", missing)
+	}
+	if c.XenditEnv != "sandbox" && c.XenditEnv != "production" {
+		return errors.New(`config: XENDIT_ENV must be "sandbox" or "production"`)
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {

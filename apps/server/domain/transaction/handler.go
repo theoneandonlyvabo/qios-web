@@ -1,7 +1,7 @@
-// domain/order/handler.go
+// domain/transaction/handler.go
 // TODO: implement semua handler
 
-package order
+package transaction
 
 import (
 	"database/sql"
