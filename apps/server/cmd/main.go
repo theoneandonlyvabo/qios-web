@@ -7,7 +7,7 @@
 //   3. Jalankan migration
 //   4. Inisialisasi services (jwt, xendit)
 //   5. Setup Echo + middleware global + validator
-//   6. Register routes
+//   6. Register routes per domain
 //   7. Start server
 
 package main
@@ -22,11 +22,11 @@ import (
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/config"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/auth"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/dashboard"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/operator"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/payment"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/transaction"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/product"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/user"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/xendit"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/database"
 	appjwt "github.com/theoneandonlyvabo/qios-web/apps/server/platform/jwt"
 	appmiddleware "github.com/theoneandonlyvabo/qios-web/apps/server/platform/middleware"
@@ -81,19 +81,35 @@ func main() {
 		AllowCredentials: true, // untuk httpOnly cookie refresh token
 	}))
 
-	// 6. Register routes
+	// 6. Register routes per domain
 	authMiddleware := appmiddleware.RequireAuth(jwtSvc)
 
+	// Auth domain — login, register, refresh, logout, Google OAuth.
 	auth.RegisterRoutes(e, db, cfg, jwtSvc, xenditSvc)
+
+	// User domain — profile + business info.
 	user.RegisterRoutes(e, db, authMiddleware)
-	transaction.RegisterRoutes(e, db, authMiddleware)
-	xendit.RegisterRoutes(e, db, cfg, authMiddleware)
+
+	// Product domain — katalog produk.
+	productRepo := product.NewRepository(db)
+	productSvc := product.NewService(productRepo)
+	product.RegisterRoutes(e, product.NewHandler(productSvc), authMiddleware, appmiddleware.RequireOwner)
 
 	// Operator domain — owner CRUD + kasir login.
 	operatorRepo := operator.NewPostgresRepository(db)
 	operatorPlan := operator.NewPostgresPlanLookup(db)
 	operatorSvc := operator.NewService(operatorRepo, operatorPlan, jwtSvc)
 	operator.RegisterRoutes(e, operator.NewHandler(operatorSvc), authMiddleware)
+
+	// Payment domain — POS orders, transaksi, Xendit connect/status.
+	// Webhook (POST /payment/xendit/webhook) belum di-register karena butuh
+	// XENDIT_WEBHOOK_TOKEN config — wire saat implementasi Xendit integration.
+	paymentRepo := payment.NewPostgresRepository(db)
+	paymentSvc := payment.NewService(paymentRepo, xenditSvc)
+	payment.RegisterRoutes(e, payment.NewHandler(paymentSvc), authMiddleware)
+
+	// Dashboard domain — placeholder stubs untuk summary, trend, peak hours, top products.
+	dashboard.RegisterRoutes(e, dashboard.NewHandler(), authMiddleware)
 
 	// 7. Start server
 	log.Printf("server starting on port %s", cfg.AppPort)

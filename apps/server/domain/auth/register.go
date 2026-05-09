@@ -165,18 +165,18 @@ func register(
 			return response.UnprocessableEntity(c, "gagal membuat akun pembayaran, coba lagi")
 		}
 
-		// Step 6 — update business dengan credentials + status REGISTERED.
+		// Step 6 — update business dengan account ID + status REGISTERED.
+		// Catatan: kolom xendit_api_key dan xendit_secret_key SENGAJA tidak diisi.
+		// Lihat AGENTS.md section "Xendit Integration Rules" — di MANAGED flow,
+		// QIOS pakai master XENDIT_SECRET_KEY + header for-user-id untuk semua
+		// sub-account ops. Sub-account tidak issue API key sendiri.
 		_, err = tx.ExecContext(ctx,
 			`UPDATE businesses
 			 SET xendit_account_id = $1,
-			     xendit_api_key    = $2,
-			     xendit_secret_key = $3,
-			     xendit_status     = $4,
+			     xendit_status     = $2,
 			     updated_at        = NOW()
-			 WHERE id = $5`,
+			 WHERE id = $3`,
 			xenditRes.AccountID,
-			nullableString(xenditRes.APIKey),
-			nullableString(xenditRes.SecretKey),
 			string(xenditRes.Status),
 			businessID,
 		)
