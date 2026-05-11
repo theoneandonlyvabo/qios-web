@@ -105,8 +105,16 @@ func main() {
 	// Webhook (POST /payment/xendit/webhook) belum di-register karena butuh
 	// XENDIT_WEBHOOK_TOKEN config — wire saat implementasi Xendit integration.
 	paymentRepo := payment.NewPostgresRepository(db)
-	paymentSvc := payment.NewService(paymentRepo, xenditSvc)
+	paymentSvc := payment.NewService(db, paymentRepo, xenditSvc, productSvc)
 	payment.RegisterRoutes(e, payment.NewHandler(paymentSvc), authMiddleware)
+
+	// Xendit webhook — public route, verified via x-callback-token.
+	if cfg.XenditWebhookToken != "" {
+		webhookHandler := payment.NewWebhookHandler(db, paymentRepo, cfg.XenditWebhookToken)
+		payment.RegisterWebhookRoute(e, webhookHandler)
+	} else {
+		log.Println("XENDIT_WEBHOOK_TOKEN not set — /webhooks/xendit disabled")
+	}
 
 	// Dashboard domain — placeholder stubs untuk summary, trend, peak hours, top products.
 	dashboard.RegisterRoutes(e, dashboard.NewHandler(), authMiddleware)

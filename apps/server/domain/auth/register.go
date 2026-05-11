@@ -7,7 +7,7 @@
 //   2. INSERT user (email + password_hash + full_name + phone)
 //   3. Generate QM ID via platform/qmid (di dalam tx yang sama)
 //   4. INSERT business dengan xendit_status = PENDING
-//   5. Call Xendit CreateManagedAccount (network — di luar DB tapi sebelum commit)
+//   5. Call Xendit CreateSubAccount (network — di luar DB tapi sebelum commit)
 //   6. UPDATE business set xendit_account_id + credentials + status REGISTERED
 //   7. Commit
 //
@@ -49,7 +49,7 @@ const (
 // xenditCreator adalah interface kecil supaya test bisa mock tanpa perlu
 // inject http.Client. Production-nya dipenuhi oleh *payment.XenditService.
 type xenditCreator interface {
-	CreateManagedAccount(ctx context.Context, in payment.ManagedAccountInput) (*payment.ManagedAccountResult, error)
+	CreateSubAccount(ctx context.Context, in payment.ManagedAccountInput) (*payment.ManagedAccountResult, error)
 }
 
 type registerRequest struct {
@@ -155,7 +155,7 @@ func register(
 		xenditCtx, xenditCancel := context.WithTimeout(ctx, xenditCreateAccountTime)
 		defer xenditCancel()
 
-		xenditRes, err := xenditSvc.CreateManagedAccount(xenditCtx, payment.ManagedAccountInput{
+		xenditRes, err := xenditSvc.CreateSubAccount(xenditCtx, payment.ManagedAccountInput{
 			Email:        req.Email,
 			BusinessName: req.BusinessName,
 			Country:      countryToISO(req.Country),

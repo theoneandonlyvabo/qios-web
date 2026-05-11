@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestCreateManagedAccount_Success(t *testing.T) {
+func TestCreateSubAccount_Success(t *testing.T) {
 	wantSecret := "xnd_test_secret_123"
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -55,13 +55,13 @@ func TestCreateManagedAccount_Success(t *testing.T) {
 	defer srv.Close()
 
 	svc := NewXenditService(srv.URL, wantSecret, srv.Client())
-	got, err := svc.CreateManagedAccount(context.Background(), ManagedAccountInput{
+	got, err := svc.CreateSubAccount(context.Background(), ManagedAccountInput{
 		Email:        "merchant@example.com",
 		BusinessName: "Toko Maju",
 		Country:      "ID",
 	})
 	if err != nil {
-		t.Fatalf("CreateManagedAccount err: %v", err)
+		t.Fatalf("CreateSubAccount err: %v", err)
 	}
 	if got.AccountID != "acc_xyz123" {
 		t.Errorf("AccountID = %q, want acc_xyz123", got.AccountID)
@@ -74,7 +74,7 @@ func TestCreateManagedAccount_Success(t *testing.T) {
 	}
 }
 
-func TestCreateManagedAccount_XenditError(t *testing.T) {
+func TestCreateSubAccount_XenditError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"error_code":"DUPLICATE_ACCOUNT","message":"email already used"}`))
@@ -82,7 +82,7 @@ func TestCreateManagedAccount_XenditError(t *testing.T) {
 	defer srv.Close()
 
 	svc := NewXenditService(srv.URL, "secret", srv.Client())
-	_, err := svc.CreateManagedAccount(context.Background(), ManagedAccountInput{
+	_, err := svc.CreateSubAccount(context.Background(), ManagedAccountInput{
 		Email:        "merchant@example.com",
 		BusinessName: "Toko",
 	})
@@ -94,12 +94,12 @@ func TestCreateManagedAccount_XenditError(t *testing.T) {
 	}
 }
 
-func TestCreateManagedAccount_ValidatesInput(t *testing.T) {
+func TestCreateSubAccount_ValidatesInput(t *testing.T) {
 	svc := NewXenditService("http://nope", "s", http.DefaultClient)
-	if _, err := svc.CreateManagedAccount(context.Background(), ManagedAccountInput{}); err == nil {
+	if _, err := svc.CreateSubAccount(context.Background(), ManagedAccountInput{}); err == nil {
 		t.Error("empty input: want error, got nil")
 	}
-	if _, err := svc.CreateManagedAccount(context.Background(), ManagedAccountInput{Email: "a@b.c"}); err == nil {
+	if _, err := svc.CreateSubAccount(context.Background(), ManagedAccountInput{Email: "a@b.c"}); err == nil {
 		t.Error("missing business_name: want error, got nil")
 	}
 }

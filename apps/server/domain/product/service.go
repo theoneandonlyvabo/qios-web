@@ -14,6 +14,16 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
+// FindByID fetches a single product owned by the given business.
+// Exposed for cross-domain price lookup (payment domain snapshots price at order time).
+func (s *Service) FindByID(productID, businessID uuid.UUID) (*Product, error) {
+	p, err := s.repo.FindByID(productID, businessID)
+	if err != nil {
+		return nil, fmt.Errorf("product service: find by id: %w", err)
+	}
+	return p, nil
+}
+
 func (s *Service) ListProducts(businessID uuid.UUID, filter FilterParams) ([]Product, error) {
 	products, err := s.repo.FindAllByBusiness(businessID, filter)
 	if err != nil {

@@ -199,6 +199,12 @@ func mapPaymentError(c echo.Context, err error) error {
 		return response.Conflict(c, "Order sudah dibayar")
 	case errors.Is(err, ErrInvalidStatus):
 		return response.BadRequest(c, err.Error())
+	case errors.Is(err, ErrProductNotFound):
+		return response.BadRequest(c, "Salah satu produk tidak ditemukan")
+	case errors.Is(err, ErrInvalidTotal):
+		return response.BadRequest(c, err.Error())
+	case errors.Is(err, ErrXenditNotActive):
+		return response.UnprocessableEntity(c, "Akun Xendit bisnis belum aktif untuk pembayaran QRIS")
 	default:
 		return response.Internal(c)
 	}

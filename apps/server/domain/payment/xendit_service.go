@@ -2,8 +2,8 @@
 //
 // Xendit service — wrapper untuk Xendit Platform API.
 //
-// Saat ini hanya CreateManagedAccount yang dipanggil dari register flow.
-// Webhook handler dan transaksi akan menyusul di sprint berikutnya.
+// CreateSubAccount membuat sub-account MANAGED untuk merchant (dipanggil di register flow).
+// CreateQRCode membuat QR dinamis untuk satu order (dipanggil saat POST /transactions QRIS).
 //
 // Auth: Basic auth dengan secret key master account QIOS.
 //   Authorization: Basic base64(XENDIT_SECRET_KEY:)
@@ -57,7 +57,7 @@ func NewXenditService(baseURL, secretKey string, httpClient HTTPClient) *XenditS
 	}
 }
 
-// CreateManagedAccount membuat sub-account MANAGED di Xendit untuk merchant.
+// CreateSubAccount membuat sub-account MANAGED di Xendit untuk merchant.
 //
 // Behaviour:
 //   - sukses → return ManagedAccountResult dengan status REGISTERED
@@ -66,7 +66,7 @@ func NewXenditService(baseURL, secretKey string, httpClient HTTPClient) *XenditS
 //
 // Tidak melakukan retry — di register flow, sub-account harus dibuat sekali
 // secara atomic; retry harus dipikirkan di level orchestrator.
-func (s *XenditService) CreateManagedAccount(
+func (s *XenditService) CreateSubAccount(
 	ctx context.Context,
 	input ManagedAccountInput,
 ) (*ManagedAccountResult, error) {
@@ -140,6 +140,98 @@ func (s *XenditService) CreateManagedAccount(
 		APIKey:     parsed.APIKey,
 		SecretKey:  parsed.SecretKey,
 		Status:     StatusRegistered,
+		RawPayload: respBody,
+	}, nil
+}
+
+// QRCodeInput adalah parameter untuk membuat QR dinamis atas nama sub-account.
+type QRCodeInput struct {
+	AccountID  string // sub-account Xendit (for-user-id)
+	ExternalID string // pos_orders.order_id (unique per order)
+	Amount     int64  // total dalam IDR (rupiah penuh, bukan cents)
+}
+
+// QRCodeResult adalah hasil pembuatan QR dinamis Xendit.
+type QRCodeResult struct {
+	XenditID   string // id dari Xendit QR (disimpan sebagai xendit_charge_id)
+	QRString   string // payload QR yang dirender frontend kasir
+	Status     string // status awal Xendit (biasanya "ACTIVE")
+	RawPayload []byte
+}
+
+// CreateQRCode membuat QR dinamis Xendit untuk satu order.
+//
+// Endpoint legacy QR: POST {base}/qr_codes
+// Auth: Basic auth master XENDIT_SECRET_KEY
+// Header: for-user-id: <accountID> — semua call atas nama sub-account.
+//
+// Body:
+//
+//	{ external_id, type: "DYNAMIC", currency: "IDR", amount, callback_url? }
+//
+// callback_url opsional — Xendit fallback ke webhook global di dashboard.
+func (s *XenditService) CreateQRCode(ctx context.Context, input QRCodeInput) (*QRCodeResult, error) {
+	if input.AccountID == "" {
+		return nil, errors.New("xendit: account_id is required")
+	}
+	if input.ExternalID == "" {
+		return nil, errors.New("xendit: external_id is required")
+	}
+	if input.Amount <= 0 {
+		return nil, errors.New("xendit: amount must be > 0")
+	}
+
+	body := map[string]any{
+		"external_id": input.ExternalID,
+		"type":        "DYNAMIC",
+		"currency":    "IDR",
+		"amount":      input.Amount,
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("xendit: failed to marshal qr request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+"/qr_codes", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("xendit: failed to build qr request: %w", err)
+	}
+	auth := base64.StdEncoding.EncodeToString([]byte(s.secretKey + ":"))
+	req.Header.Set("Authorization", "Basic "+auth)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("for-user-id", input.AccountID)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("xendit: qr request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("xendit: failed to read qr response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("xendit: create qr failed (status=%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var parsed struct {
+		ID       string `json:"id"`
+		QRString string `json:"qr_string"`
+		Status   string `json:"status"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, fmt.Errorf("xendit: failed to parse qr response: %w", err)
+	}
+	if parsed.QRString == "" {
+		return nil, fmt.Errorf("xendit: qr response missing qr_string: %s", string(respBody))
+	}
+
+	return &QRCodeResult{
+		XenditID:   parsed.ID,
+		QRString:   parsed.QRString,
+		Status:     parsed.Status,
 		RawPayload: respBody,
 	}, nil
 }

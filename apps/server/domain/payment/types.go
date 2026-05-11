@@ -16,9 +16,14 @@ import (
 // Sentinel errors
 // ----------------------------------------------------------------
 
-var ErrOrderNotFound    = errors.New("order not found")
-var ErrOrderAlreadyPaid = errors.New("order already paid")
-var ErrInvalidStatus    = errors.New("invalid order status transition")
+var ErrOrderNotFound          = errors.New("order not found")
+var ErrOrderAlreadyPaid       = errors.New("order already paid")
+var ErrInvalidStatus          = errors.New("invalid order status transition")
+var ErrProductNotFound        = errors.New("product not found")
+var ErrInvalidTotal           = errors.New("order total must be greater than zero")
+var ErrBusinessNotFound       = errors.New("business not found")
+var ErrXenditNotActive        = errors.New("business xendit account is not active")
+var ErrXenditPaymentNotFound  = errors.New("xendit payment not found")
 
 // ----------------------------------------------------------------
 // Enums
@@ -64,6 +69,24 @@ type PosOrder struct {
 	PaidAt        *time.Time    `json:"paid_at,omitempty"`
 	CreatedAt     time.Time     `json:"created_at"`
 	UpdatedAt     time.Time     `json:"updated_at"`
+}
+
+// XenditPayment merepresentasikan baris di tabel xendit_payments.
+// Disimpan saat QR di-generate dan diupdate saat webhook payment masuk.
+type XenditPayment struct {
+	ID              uuid.UUID
+	PosOrderID      uuid.UUID
+	XenditAccountID string
+	XenditInvoiceID string
+	XenditChargeID  string
+	PaymentMethod   PaymentMethod
+	Amount          int64
+	Status          string // "PENDING" | "PAID" | "FAILED" | "EXPIRED" | ... (uppercase di table)
+	QRString        string
+	RawPayload      []byte
+	PaidAt          *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // OrderItem merepresentasikan baris di tabel pos_order_items.
@@ -117,6 +140,7 @@ type OrderItemResponse struct {
 }
 
 // OrderResponse adalah response untuk create dan get order.
+// QRString hanya diisi pada CreateOrder QRIS — kasir render langsung dari field ini.
 type OrderResponse struct {
 	ID            uuid.UUID           `json:"id"`
 	OrderID       string              `json:"order_id"`
@@ -127,4 +151,5 @@ type OrderResponse struct {
 	PaidAt        *time.Time          `json:"paid_at,omitempty"`
 	Items         []OrderItemResponse `json:"items"`
 	CreatedAt     time.Time           `json:"created_at"`
+	QRString      string              `json:"qr_string,omitempty"`
 }
