@@ -1,52 +1,75 @@
-import { API_URL, AUTH_TOKEN_KEY } from "./constants";
-import { clearAuthData } from "./auth";
+/**
+ * lib/api.ts
+ * Base fetch helper — token disimpan di memory, bukan localStorage (aturan CLAUDE.md)
+ * Semua request ke Go HARUS lewat /api/... bukan langsung ke :8080
+ */
 
-interface RequestOptions extends RequestInit {
-  params?: Record<string, string>;
-}
+let accessToken: string | null = null;
 
-export async function apiRequest<T>(
-  endpoint: string,
-  options: RequestOptions = {}
-): Promise<T> {
-  const { params, headers, ...rest } = options;
+export function setAccessToken(token: string) { accessToken = token; }
+export function getAccessToken() { return accessToken; }
+export function clearAccessToken() { accessToken = null; }
 
-  let url = `${API_URL}${endpoint}`;
+type FetchOptions = {
+  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  body?: unknown;
+  params?: Record<string, string | number | undefined>;
+};
+
+export async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
+  const { method = "GET", body, params } = options;
+
+  let url = path;
   if (params) {
-    const searchParams = new URLSearchParams(params);
-    url += `?${searchParams.toString()}`;
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined) qs.set(k, String(v)); });
+    const str = qs.toString();
+    if (str) url += "?" + str;
   }
 
-  const token = typeof window !== "undefined" ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
-  const defaultHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (token) {
-    defaultHeaders["Authorization"] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(url, {
-    ...rest,
-    headers: {
-      ...defaultHeaders,
-      ...headers,
-    },
+  const res = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
   });
 
-  const data = await response.json();
-
-  if (response.status === 401) {
-    clearAuthData();
-    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
-      window.location.href = "/login";
+  if (res.status === 401) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+      const retry = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+      if (!retry.ok) throw new ApiError(retry.status, "Unauthorized setelah refresh");
+      return retry.json();
     }
+    clearAccessToken();
+    if (typeof window !== "undefined") window.location.href = "/login";
+    throw new ApiError(401, "Sesi habis, silakan login kembali");
   }
 
-  if (!response.ok) {
-    throw new Error(data.error || "Something went wrong");
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, errBody?.error ?? "Terjadi kesalahan");
   }
 
-  return data;
+  return res.json();
+}
+
+async function tryRefresh(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth/refresh", { method: "POST" });
+    if (!res.ok) return false;
+    const json = await res.json();
+    if (json?.data?.access_token) { setAccessToken(json.data.access_token); return true; }
+    return false;
+  } catch { return false; }
+}
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
 }
