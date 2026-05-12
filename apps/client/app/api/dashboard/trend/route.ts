@@ -4,11 +4,13 @@
  * Query: start_date, end_date (format YYYY-MM-DD)
  */
 import { NextRequest, NextResponse } from "next/server";
- 
+import { isTestBypass, MOCK } from "@/app/api/_test-bypass";
+
 const GO_API = process.env.GO_API_URL ?? "http://localhost:8080";
  
 export async function GET(req: NextRequest) {
   const token     = req.headers.get("authorization");
+  if (isTestBypass(req)) return NextResponse.json(MOCK.trend);
   const startDate = req.nextUrl.searchParams.get("start_date") ?? "";
   const endDate   = req.nextUrl.searchParams.get("end_date") ?? "";
  

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "QIOS — Kendali Penuh Atas Data Bisnis Anda",
@@ -10,12 +12,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="id"
-      suppressHydrationWarning
-      className={`${plusJakartaSans.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="id" suppressHydrationWarning className={`${inter.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col font-sans">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

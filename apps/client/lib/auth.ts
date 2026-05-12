@@ -1,3 +1,4 @@
+import { setAccessToken, clearAccessToken } from "./api";
 import { AUTH_TOKEN_KEY, USER_DATA_KEY } from "./constants";
 
 export interface User {
@@ -14,12 +15,9 @@ export interface AuthData {
 }
 
 export const setAuthData = (data: AuthData) => {
+  setAccessToken(data.access_token);
   if (typeof window !== "undefined") {
-    // Set cookie for middleware access
-    document.cookie = `${AUTH_TOKEN_KEY}=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
-    
-    // Set localStorage for persistence and user data
-    localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
+    document.cookie = `${AUTH_TOKEN_KEY}=${data.access_token}; path=/; max-age=900; SameSite=Lax`;
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(data.user));
   }
 };
@@ -40,9 +38,9 @@ export const getUserData = (): User | null => {
 };
 
 export const clearAuthData = () => {
+  clearAccessToken();
   if (typeof window !== "undefined") {
     document.cookie = `${AUTH_TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-    localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(USER_DATA_KEY);
   }
 };
