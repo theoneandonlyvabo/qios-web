@@ -16,9 +16,21 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+func businessIDFromCtx(c echo.Context) (uuid.UUID, error) {
+	raw, _ := c.Get("business_id").(string)
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, errors.New("invalid business_id in token")
+	}
+	return id, nil
+}
+
 // GET /products
 func (h *Handler) ListProducts(c echo.Context) error {
-	businessID := c.Get("business_id").(uuid.UUID)
+	businessID, err := businessIDFromCtx(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
 
 	filter := FilterParams{
 		Category: c.QueryParam("category"),
@@ -31,14 +43,17 @@ func (h *Handler) ListProducts(c echo.Context) error {
 
 	products, err := h.service.ListProducts(businessID, filter)
 	if err != nil {
-		return response.InternalError(c, err.Error())
+		return response.Internal(c)
 	}
 	return response.OK(c, products)
 }
 
 // POST /products
 func (h *Handler) CreateProduct(c echo.Context) error {
-	businessID := c.Get("business_id").(uuid.UUID)
+	businessID, err := businessIDFromCtx(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
 
 	var input CreateInput
 	if err := c.Bind(&input); err != nil {
@@ -53,14 +68,17 @@ func (h *Handler) CreateProduct(c echo.Context) error {
 
 	product, err := h.service.CreateProduct(businessID, input)
 	if err != nil {
-		return response.InternalError(c, err.Error())
+		return response.Internal(c)
 	}
 	return response.Created(c, product)
 }
 
 // PATCH /products/:product_id
 func (h *Handler) UpdateProduct(c echo.Context) error {
-	businessID := c.Get("business_id").(uuid.UUID)
+	businessID, err := businessIDFromCtx(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
 
 	productID, err := uuid.Parse(c.Param("product_id"))
 	if err != nil {
@@ -77,14 +95,17 @@ func (h *Handler) UpdateProduct(c echo.Context) error {
 		if errors.Is(err, ErrNotFound) {
 			return response.NotFoundMsg(c, "Produk tidak ditemukan")
 		}
-		return response.InternalError(c, err.Error())
+		return response.Internal(c)
 	}
 	return response.OK(c, product)
 }
 
 // DELETE /products/:product_id
 func (h *Handler) DeleteProduct(c echo.Context) error {
-	businessID := c.Get("business_id").(uuid.UUID)
+	businessID, err := businessIDFromCtx(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
 
 	productID, err := uuid.Parse(c.Param("product_id"))
 	if err != nil {
@@ -95,12 +116,11 @@ func (h *Handler) DeleteProduct(c echo.Context) error {
 		if errors.Is(err, ErrNotFound) {
 			return response.NotFoundMsg(c, "Produk tidak ditemukan")
 		}
-		return response.InternalError(c, err.Error())
+		return response.Internal(c)
 	}
 	return response.NoContent(c)
 }
 
-// RegisterRoutes wires all product routes to the Echo instance.
 func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware, ownerGuard echo.MiddlewareFunc) {
 	products := e.Group("/products", authMiddleware)
 	products.GET("", h.ListProducts)

@@ -3,6 +3,7 @@
 .env.development
 .env.test
 .env.production
+.claude
 
 node_modules
 dist

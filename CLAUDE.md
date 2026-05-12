@@ -102,19 +102,19 @@ apps/server/
 │   ├── middleware/         # auth middleware, role guard
 │   └── response/           # helper response JSON standar
 └── domain/
-    ├── admin/              # admin panel, audit log, monitoring
-    ├── analytic/           # AI analytics — rule-based insight engine
     ├── auth/               # register, login, Google OAuth, refresh, logout
-    ├── dashboard/          # summary, tren transaksi, peak hours
-    ├── operator/           # CRUD akun operator per bisnis
-    ├── payment/            # Xendit service (CreateManagedAccount, future webhook handler)
+    ├── dashboard/          # summary, tren transaksi, peak hours, top produk (placeholder)
+    ├── operator/           # CRUD akun operator + login kasir (canonical reference)
+    ├── payment/            # POS orders, transaksi, Xendit integration, webhook
     ├── product/            # katalog produk, soft delete
-    ├── statistic/          # produk terlaris, breakdown performa
-    ├── transaction/        # pos orders dan order items
     └── user/               # profil user dan bisnis
+
+Domain post-MVP yang belum di-implement: admin/, analytic/, statistic/.
 ```
 
-Setiap domain mengikuti pola: `handler.go` → `service.go` → `repository.go`. Handler tidak boleh menyentuh database langsung — semua lewat service dan repository.
+Setiap domain mengikuti pola: `handler.go` → `service.go` → `repository.go`. Handler tidak boleh menyentuh database langsung — semua lewat service dan repository. Pattern canonical ada di `apps/server/AGENTS.md` — `domain/operator/` dijadikan referensi.
+
+**Konsolidasi (2026-05-09):** `domain/transaction/` dan `domain/xendit/` digabung ke `domain/payment/` supaya semua payment concern (POS orders, Xendit integration, webhook) ada di satu tempat. Dashboard endpoint dipindah ke `domain/dashboard/` baru.
 
 ### Database — PostgreSQL 16
 
@@ -168,9 +168,10 @@ Kontrak lengkap ada di `docs/qios-api.yaml` (OpenAPI 3.0.3).
 | Product | `/products` | POST | Tambah produk baru |
 | Product | `/products/{id}` | PATCH | Update produk |
 | Product | `/products/{id}` | DELETE | Soft delete produk |
-| Transaction | `/transactions` | GET | List transaksi (filter + pagination) |
-| Transaction | `/transactions` | POST | Buat order baru dari kasir |
-| Transaction | `/transactions/{id}` | GET | Detail transaksi |
+| Payment | `/transactions` | GET | List transaksi (filter + pagination) |
+| Payment | `/transactions` | POST | Buat order baru dari kasir |
+| Payment | `/transactions/{id}` | GET | Detail transaksi |
+| Payment | `/transactions/{id}/complete` | POST | Selesaikan order cash (tidak via Xendit) |
 | Payment | `/payment/xendit/connect` | POST | Hubungkan akun Xendit |
 | Payment | `/payment/xendit/status` | GET | Cek status koneksi Xendit |
 | Payment | `/payment/xendit/webhook` | POST | Terima notifikasi dari Xendit |
@@ -186,7 +187,7 @@ Setiap perubahan endpoint **harus diupdate di `docs/qios-api.yaml` terlebih dahu
 
 ## Database Schema
 
-12 migration files (+ penambahan ke depan), urutan wajib dipertahankan:
+14 migration files (+ penambahan ke depan), urutan wajib dipertahankan:
 
 | File | Tabel | Keterangan |
 |------|-------|------------|
@@ -203,6 +204,7 @@ Setiap perubahan endpoint **harus diupdate di `docs/qios-api.yaml` terlebih dahu
 | 011 | `webhook_events` | Log semua notifikasi masuk dari Xendit |
 | 012 | `admin_audit_logs` | Audit trail aksi admin |
 | 013 | `operators` (alter) | Tambah `operator_code` untuk login kasir |
+| 014 | `pos_orders` (alter) | Tambah `payment_method` (`CASH`/`QRIS`/`EWALLET`/`VIRTUAL_ACCOUNT`), `updated_at`, dan status `cancelled`. Approved 2026-05-09. |
 
 **Aturan penting:**
 - `product_name` dan `unit_price` di `pos_order_items` adalah snapshot — disimpan saat transaksi terjadi, bukan FK ke produk. Ini menjaga akurasi data historis jika produk diedit atau dihapus.

@@ -7,7 +7,7 @@
 //   2. INSERT user (email + password_hash + full_name + phone)
 //   3. Generate QM ID via platform/qmid (di dalam tx yang sama)
 //   4. INSERT business dengan xendit_status = PENDING
-//   5. Call Xendit CreateManagedAccount (network — di luar DB tapi sebelum commit)
+//   5. Call Xendit CreateSubAccount (network — di luar DB tapi sebelum commit)
 //   6. UPDATE business set xendit_account_id + credentials + status REGISTERED
 //   7. Commit
 //
@@ -49,7 +49,7 @@ const (
 // xenditCreator adalah interface kecil supaya test bisa mock tanpa perlu
 // inject http.Client. Production-nya dipenuhi oleh *payment.XenditService.
 type xenditCreator interface {
-	CreateManagedAccount(ctx context.Context, in payment.ManagedAccountInput) (*payment.ManagedAccountResult, error)
+	CreateSubAccount(ctx context.Context, in payment.ManagedAccountInput) (*payment.ManagedAccountResult, error)
 }
 
 type registerRequest struct {
@@ -155,7 +155,7 @@ func register(
 		xenditCtx, xenditCancel := context.WithTimeout(ctx, xenditCreateAccountTime)
 		defer xenditCancel()
 
-		xenditRes, err := xenditSvc.CreateManagedAccount(xenditCtx, payment.ManagedAccountInput{
+		xenditRes, err := xenditSvc.CreateSubAccount(xenditCtx, payment.ManagedAccountInput{
 			Email:        req.Email,
 			BusinessName: req.BusinessName,
 			Country:      countryToISO(req.Country),
@@ -165,18 +165,18 @@ func register(
 			return response.UnprocessableEntity(c, "gagal membuat akun pembayaran, coba lagi")
 		}
 
-		// Step 6 — update business dengan credentials + status REGISTERED.
+		// Step 6 — update business dengan account ID + status REGISTERED.
+		// Catatan: kolom xendit_api_key dan xendit_secret_key SENGAJA tidak diisi.
+		// Lihat AGENTS.md section "Xendit Integration Rules" — di MANAGED flow,
+		// QIOS pakai master XENDIT_SECRET_KEY + header for-user-id untuk semua
+		// sub-account ops. Sub-account tidak issue API key sendiri.
 		_, err = tx.ExecContext(ctx,
 			`UPDATE businesses
 			 SET xendit_account_id = $1,
-			     xendit_api_key    = $2,
-			     xendit_secret_key = $3,
-			     xendit_status     = $4,
+			     xendit_status     = $2,
 			     updated_at        = NOW()
-			 WHERE id = $5`,
+			 WHERE id = $3`,
 			xenditRes.AccountID,
-			nullableString(xenditRes.APIKey),
-			nullableString(xenditRes.SecretKey),
 			string(xenditRes.Status),
 			businessID,
 		)

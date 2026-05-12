@@ -32,9 +32,11 @@ type Config struct {
 	// Xendit (xenPlatform). XenditSecretKey adalah master secret QIOS yang dipakai
 	// untuk membuat sub-account dan operasi platform-level lain. Setiap sub-account
 	// punya api_key/secret_key sendiri yang disimpan di tabel businesses.
-	XenditSecretKey string
-	XenditEnv       string // "sandbox" atau "production"
-	XenditBaseURL   string // override opsional, default https://api.xendit.io
+	XenditSecretKey         string
+	XenditEnv               string // "sandbox" atau "production"
+	XenditBaseURL           string // override opsional, default https://api.xendit.io
+	XenditWebhookToken      string // verifikasi header x-callback-token dari Xendit webhook
+	XenditPlatformAccountID string // master account ID QIOS — reserved untuk audit/multi-platform
 }
 
 func Load() *Config {
@@ -55,9 +57,11 @@ func Load() *Config {
 		JWTAccessExpiry:  getEnv("JWT_ACCESS_EXPIRY", "15m"),
 		JWTRefreshExpiry: getEnv("JWT_REFRESH_EXPIRY", "720h"),
 
-		XenditSecretKey: getEnv("XENDIT_SECRET_KEY", ""),
-		XenditEnv:       getEnv("XENDIT_ENV", "sandbox"),
-		XenditBaseURL:   getEnv("XENDIT_BASE_URL", "https://api.xendit.io"),
+		XenditSecretKey:         getEnv("XENDIT_SECRET_KEY", ""),
+		XenditEnv:               getEnv("XENDIT_ENV", "sandbox"),
+		XenditBaseURL:           getEnv("XENDIT_BASE_URL", "https://api.xendit.io"),
+		XenditWebhookToken:      getEnv("XENDIT_WEBHOOK_TOKEN", ""),
+		XenditPlatformAccountID: getEnv("XENDIT_PLATFORM_ACCOUNT_ID", ""),
 	}
 }
 

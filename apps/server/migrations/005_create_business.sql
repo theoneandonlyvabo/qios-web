@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS businesses (
     country            VARCHAR(100),
 
     xendit_account_id  VARCHAR(255),
+    -- xendit_api_key dan xendit_secret_key reserved: tidak dipakai di MANAGED flow.
+    -- QIOS pakai master XENDIT_SECRET_KEY + header for-user-id untuk semua call atas
+    -- nama sub-account. Kolom dipertahankan untuk kandidat OWNED post-MVP, pending review.
+    -- Lihat AGENTS.md section "Xendit Integration Rules".
     xendit_api_key     TEXT,
     xendit_secret_key  TEXT,
     xendit_status      VARCHAR(20)  NOT NULL DEFAULT 'PENDING'
