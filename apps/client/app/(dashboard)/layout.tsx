@@ -30,7 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       background: bg,
       minHeight: "100vh",
       color: text,
-      fontFamily: "'DM Sans', system-ui, sans-serif",
+      fontFamily: "var(--font-sans)",
     }}>
 
       {/* Sidebar desktop */}

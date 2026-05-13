@@ -4,10 +4,6 @@
 -- Status mengikuti event Xendit (qr_code, invoice, dll) — disimpan apa adanya
 -- supaya logic interpretasi ada di service layer, bukan di constraint DB.
 
--- Cleanup tabel Midtrans peninggalan iterasi sebelumnya (pre-Xendit decision).
--- Aman karena belum ada data production saat migrasi ini di-run.
-DROP TABLE IF EXISTS midtrans_payments;
-
 CREATE TABLE IF NOT EXISTS xendit_payments (
     id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     pos_order_id       UUID NOT NULL REFERENCES pos_orders(id) ON DELETE CASCADE,
@@ -21,6 +17,7 @@ CREATE TABLE IF NOT EXISTS xendit_payments (
                                'PENDING', 'PAID', 'SETTLED',
                                'FAILED', 'EXPIRED', 'REFUNDED'
                            )),
+    qr_string          TEXT,                         -- payload QR untuk render di kasir
     raw_payload        JSONB,                        -- raw webhook payload terakhir
     paid_at            TIMESTAMPTZ,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),

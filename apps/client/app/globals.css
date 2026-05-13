@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
 
   --color-brand: #CC2200;
   --color-brand-orange: #E65100;

@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { ThemeToggle } from "@/components/theme-toggle";
 
 import { useRouter } from "next/navigation";
-import { apiRequest } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import { setAuthData, AuthData } from "@/lib/auth";
 
 const features = [
@@ -50,15 +50,26 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError(null);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Masukkan alamat email yang valid");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Kata sandi minimal 6 karakter");
+      return;
+    }
+
+    setIsLoading(true);
     
     try {
-      const response = await apiRequest<{ success: boolean; data: AuthData; error: string | null }>(
-        "/auth/login",
+      const response = await apiFetch<{ success: boolean; data: AuthData; error: string | null }>(
+        "/api/auth/login",
         {
           method: "POST",
-          body: JSON.stringify({ email, password }),
+          body: { email, password },
         }
       );
 
@@ -68,8 +79,8 @@ export default function LoginPage() {
       } else {
         setError(response.error || "Email atau kata sandi salah");
       }
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan pada server");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Terjadi kesalahan pada server");
     } finally {
       setIsLoading(false);
     }
