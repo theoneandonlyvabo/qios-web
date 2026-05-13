@@ -51,15 +51,15 @@ Satu user (owner) hanya bisa memiliki satu bisnis. Untuk bisnis berbeda, harus m
 
 ```
 apps/
-├── client/     # Next.js 15 — frontend monorepo (dashboard + kasir)
+├── client/     # Next.js 16.2.6 — frontend monorepo (dashboard + kasir)
 └── server/     # Go + Echo — REST API backend
 ```
 
 Satu monorepo, dua aplikasi. Client dan server dideploy secara terpisah tapi berada dalam satu repository untuk kemudahan koordinasi.
 
-### Client — Next.js 15
+### Client — Next.js 16.2.6
 
-**Stack:** Next.js 15, TypeScript, Tailwind CSS, Recharts, npm
+**Stack:** Next.js 16.2.6, TypeScript, Tailwind CSS v4, Recharts, npm
 
 **Dua mode UI dalam satu codebase:**
 - `(dashboard)` — interface owner, desktop-first, akses via `qios.id/dashboard`
@@ -85,6 +85,23 @@ Interface kasir ditargetkan sebagai **PWA di Android**. iOS bukan prioritas MVP.
 | Route | Halaman | Keterangan |
 |-------|---------|------------|
 | `/kasir` | Interface Kasir | Input order, generate QR, cek status pembayaran |
+
+**Auth Architecture (Next.js client layer):**
+- Login: browser → `POST /api/auth/login` (Next.js route handler) → Go → Next.js route set HttpOnly cookie server-side + return access token ke browser
+- Access token disimpan di **memory** (runtime) + **localStorage** untuk offline mode support — ini keputusan desain, bukan bug
+- Refresh token disimpan di **HttpOnly cookie**, di-set server-side via Next.js route handler, tidak pernah terekspos ke JavaScript browser
+- Logout: `POST /api/auth/logout` (Next.js route handler) — hapus HttpOnly cookie server-side, clear in-memory token di client
+- Middleware (`middleware.ts`) verifikasi HttpOnly cookie untuk semua route `/dashboard/*`, `/profile/*`, `/settings/*`
+- Token rehydration: `hooks/useAuth.ts` baca access token dari localStorage ke memory saat app load (untuk offline mode)
+
+**Security Headers (`next.config.ts`):**
+Semua response Next.js menyertakan header berikut:
+`X-Frame-Options: DENY` · `X-Content-Type-Options: nosniff` · `Referrer-Policy: strict-origin-when-cross-origin` · `Strict-Transport-Security: max-age=31536000; includeSubDomains` · `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+
+**Admin Test Page (`/admin`):**
+`app/(dashboard)/admin/page.tsx` — halaman mock data untuk testing semua UI state (data / loading / error / empty). **Tidak memerlukan auth — tidak ada di matcher middleware.** Harus dihapus sebelum production deploy.
+
+---
 
 ### Server — Go + Echo
 
@@ -144,7 +161,8 @@ Kontrak lengkap ada di `docs/qios-api.yaml` (OpenAPI 3.0.3).
   { "success": true/false, "data": ..., "error": "..." }
   ```
 - Autentikasi menggunakan Bearer JWT di header `Authorization`
-- Refresh token disimpan di httpOnly cookie, bukan localStorage
+- Refresh token disimpan di httpOnly cookie, di-set server-side via Next.js route handler
+- Access token disimpan di memory runtime + localStorage (offline mode) — intentional, bukan bug
 - Role-based access dijalankan di middleware — handler tidak perlu cek role sendiri
 - Endpoint webhook Xendit (`POST /payment/xendit/webhook`) tidak menggunakan Bearer auth, tapi diverifikasi via Xendit signature key
 
@@ -511,6 +529,9 @@ npm run dev
 
 Client berjalan di `http://localhost:3000`, server di `http://localhost:8080`.
 
+**Catatan npm audit:**
+Satu moderate vulnerability tersisa (postcss, nested di dalam Next.js internals). Tidak bisa di-fix dari project ini — harus menunggu patch dari upstream Next.js. Bukan dependency langsung project. Pantau update Next.js untuk resolusi.
+
 ---
 
 ## Sprint Roadmap
@@ -679,11 +700,13 @@ refactor: pisahkan auth service dari handler
 - Refresh token disimpan sebagai hash, bukan plain text
 - Validasi signature Xendit wajib dijalankan sebelum memproses webhook (requirement PG-05)
 - Tidak ada secret atau credential yang di-commit ke repository
+- Security headers dikonfigurasi di `apps/client/next.config.ts` — berlaku untuk semua response: X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, Permissions-Policy
 
 ---
 
 ## Yang Belum Final (Pending)
 
+- **Hapus sebelum prod:** `app/(dashboard)/admin/page.tsx` — halaman test-only tanpa auth guard, akses via `/admin`
 - Seed data `plans` dan `subscriptions` — tunggu konfirmasi pricing dari board
 - Konfirmasi ke Xendit: apakah item detail per transaksi tersedia via API atau webhook
 - Flutter vs PWA untuk jangka panjang — MVP tetap PWA Android

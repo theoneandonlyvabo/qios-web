@@ -7,7 +7,7 @@ Bukan POS — QIOS adalah BI layer di atas payment flow.
 
 <br />
 
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
 [![Go](https://img.shields.io/badge/Go-1.26.2-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -38,7 +38,7 @@ Browser (Owner / Operator)
          │
          ▼
   ┌─────────────────┐
-  │   apps/client   │  Next.js 15 — UI, route groups, API Routes
+  │   apps/client   │  Next.js 16.2.6 — UI, route groups, API Routes
   └────────┬────────┘
            │  HTTP (internal)
            ▼
@@ -48,7 +48,7 @@ Browser (Owner / Operator)
            │
            ▼
   ┌─────────────────┐
-  │   PostgreSQL    │  Docker — persistent storage, 12 migrations
+  │   PostgreSQL    │  Docker — persistent storage, 14 migrations
   └─────────────────┘
 ```
 
@@ -58,11 +58,11 @@ Browser (Owner / Operator)
 
 | Layer | Teknologi | Alasan |
 |---|---|---|
-| Frontend | Next.js 15 + TypeScript | Handle UI dan mid-end dalam satu framework |
+| Frontend | Next.js 16.2.6 + TypeScript | Handle UI dan mid-end dalam satu framework |
 | Backend | Go 1.26.2 + Echo v4 | Performa tinggi, concurrency native untuk webhook |
 | Database | PostgreSQL 16 | ACID compliance — data transaksi tidak boleh corrupt |
 | Payment | Xendit xenPlatform | Sub-account per merchant, split rule otomatis |
-| Auth | JWT (httpOnly cookie) | Refresh token aman, access token di memory |
+| Auth | JWT (httpOnly cookie + localStorage) | Refresh token di HttpOnly cookie (server-side), access token di memory + localStorage (offline mode) |
 
 ---
 
@@ -90,7 +90,7 @@ qios-web/
 *Bagian ini untuk developer yang handle `apps/client`.*
 *Developer backend? Loncat ke [Backend Guide](#-backend-guide).*
 
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-v24.15.0-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind](https://img.shields.io/badge/Tailwind-v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
@@ -104,7 +104,7 @@ qios-web/
 | Semua UI — halaman, komponen, layout | `apps/server/` |
 | API Routes sebagai jembatan ke backend Go | `migrations/` |
 | Auth guard dan redirect | Konfigurasi database |
-| Token management (memory, bukan localStorage) | File `.env` server |
+| Token management (memory + localStorage untuk offline mode) | File `.env` server |
 
 ---
 
@@ -220,9 +220,11 @@ Buka Pull Request ke `dev`. Jangan self-merge.
 
 - Komponen di `components/` — tampilan saja, tanpa logika bisnis
 - Jangan panggil Go langsung dari browser — selalu lewat `app/api/`
-- Token tidak boleh di `localStorage` — sudah dihandle di `lib/auth.ts`
+- Token management dihandle di `lib/auth.ts` — access token disimpan di memory + localStorage (offline mode support). Jangan simpan data sensitif lain di localStorage
+- Security headers dikonfigurasi di `next.config.ts` — berlaku otomatis untuk semua response
 - Chart library: **Recharts** — jangan ganti tanpa diskusi tim
 - Jangan buat folder baru tanpa diskusi project lead
+- **Hapus sebelum production:** `app/(dashboard)/admin/page.tsx` — halaman test-only tanpa auth guard (akses via `/admin`)
 
 ---
 
@@ -349,7 +351,7 @@ apps/server/
 │   ├── jwt/                # issue dan verify token
 │   ├── middleware/         # auth guard, role check
 │   └── response/           # helper JSON response standar
-└── migrations/             # file .sql bernomor urut (001–012)
+└── migrations/             # file .sql bernomor urut (001–014)
 ```
 
 **Status implementasi:**
@@ -423,8 +425,8 @@ POST /auth/login
   → verifikasi email + password
   → issue access token (15m) + refresh token (720h)
 
-Next.js:  refresh token → httpOnly cookie
-Browser:  access token → memory
+Next.js:  refresh token → httpOnly cookie (di-set server-side)
+Browser:  access token → memory + localStorage (offline mode)
 
 Setiap request:
   → Authorization: Bearer <access_token>
