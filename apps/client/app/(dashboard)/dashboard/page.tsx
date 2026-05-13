@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
-// ─── Types (sesuai qios-api.yaml) ─────────────────────────────────────────────
+// ─── Types (sesuai qios-api.yml) ─────────────────────────────────────────────
 
 type DashboardSummary = {
   period: string;
