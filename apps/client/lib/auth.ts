@@ -17,7 +17,9 @@ export interface AuthData {
 export const setAuthData = (data: AuthData) => {
   setAccessToken(data.access_token);
   if (typeof window !== "undefined") {
-    document.cookie = `${AUTH_TOKEN_KEY}=${data.access_token}; path=/; max-age=900; SameSite=Lax`;
+    // Token stored in localStorage for offline-mode support and memory rehydration.
+    // HttpOnly cookie is set server-side by the login route handler.
+    localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(data.user));
   }
 };
@@ -40,7 +42,7 @@ export const getUserData = (): User | null => {
 export const clearAuthData = () => {
   clearAccessToken();
   if (typeof window !== "undefined") {
-    document.cookie = `${AUTH_TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(USER_DATA_KEY);
   }
 };

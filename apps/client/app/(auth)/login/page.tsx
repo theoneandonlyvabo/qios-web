@@ -50,8 +50,19 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError(null);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Masukkan alamat email yang valid");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Kata sandi minimal 6 karakter");
+      return;
+    }
+
+    setIsLoading(true);
     
     try {
       const response = await apiFetch<{ success: boolean; data: AuthData; error: string | null }>(
@@ -177,7 +188,7 @@ export default function LoginPage() {
                   </label>
                   <Input
                     id="email"
-                    type="text"
+                    type="email"
                     placeholder="admin@bisnis-anda.com"
                     required
                     value={email}
