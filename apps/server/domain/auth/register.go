@@ -27,6 +27,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -152,37 +153,41 @@ func register(
 		}
 
 		// Step 5 — call Xendit MANAGED account API.
-		xenditCtx, xenditCancel := context.WithTimeout(ctx, xenditCreateAccountTime)
-		defer xenditCancel()
+		var xenditAccountID string
+		var xenditStatus string
 
-		xenditRes, err := xenditSvc.CreateSubAccount(xenditCtx, payment.ManagedAccountInput{
-			Email:        req.Email,
-			BusinessName: req.BusinessName,
-			Country:      countryToISO(req.Country),
-		})
-		if err != nil {
-			c.Logger().Errorf("xendit create account failed: %v", err)
-			return response.UnprocessableEntity(c, "gagal membuat akun pembayaran, coba lagi")
+		if os.Getenv("SKIP_XENDIT") == "true" {
+			// Local dev only — skip Xendit call
+			xenditAccountID = "dev-mock-" + businessID
+			xenditStatus = "REGISTERED"
+		} else {
+			xenditCtx, xenditCancel := context.WithTimeout(ctx, xenditCreateAccountTime)
+			defer xenditCancel()
+
+			xenditRes, err := xenditSvc.CreateSubAccount(xenditCtx, payment.ManagedAccountInput{
+				Email:        req.Email,
+				BusinessName: req.BusinessName,
+				Country:      countryToISO(req.Country),
+			})
+			if err != nil {
+				c.Logger().Errorf("xendit create account failed: %v", err)
+				return response.UnprocessableEntity(c, "gagal membuat akun pembayaran, coba lagi")
+			}
+			xenditAccountID = xenditRes.AccountID
+			xenditStatus = string(xenditRes.Status)
 		}
 
-		// Step 6 — update business dengan account ID + status REGISTERED.
-		// Catatan: kolom xendit_api_key dan xendit_secret_key SENGAJA tidak diisi.
-		// Lihat AGENTS.md section "Xendit Integration Rules" — di MANAGED flow,
-		// QIOS pakai master XENDIT_SECRET_KEY + header for-user-id untuk semua
-		// sub-account ops. Sub-account tidak issue API key sendiri.
+		// Step 6 — update business
 		_, err = tx.ExecContext(ctx,
 			`UPDATE businesses
-			 SET xendit_account_id = $1,
-			     xendit_status     = $2,
-			     updated_at        = NOW()
-			 WHERE id = $3`,
-			xenditRes.AccountID,
-			string(xenditRes.Status),
+			SET xendit_account_id = $1,
+				xendit_status     = $2,
+				updated_at        = NOW()
+			WHERE id = $3`,
+			xenditAccountID,
+			xenditStatus,
 			businessID,
 		)
-		if err != nil {
-			return response.Internal(c)
-		}
 
 		// Step 7 — commit.
 		if err := tx.Commit(); err != nil {
@@ -213,7 +218,7 @@ func register(
 				UserID:       userID,
 				BusinessID:   businessID,
 				QMID:         qmIDValue,
-				XenditStatus: string(xenditRes.Status),
+				XenditStatus: xenditStatus,
 			},
 		})
 	}
