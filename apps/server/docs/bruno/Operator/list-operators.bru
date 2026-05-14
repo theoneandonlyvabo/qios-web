@@ -1,0 +1,15 @@
+meta {
+  name: List Operators
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/business/operators
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{owner_token}}
+}

@@ -1,0 +1,15 @@
+meta {
+  name: Kasir Logout
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/kasir/auth/logout
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{operator_token}}
+}

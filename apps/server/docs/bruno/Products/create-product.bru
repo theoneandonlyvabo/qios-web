@@ -1,0 +1,30 @@
+meta {
+  name: Create Product
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/products
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{owner_token}}
+}
+
+body:json {
+  {
+    "name": "Nasi Goreng Spesial",
+    "price": 25000,
+    "category": "Makanan",
+    "description": "Nasi goreng dengan telur dan ayam"
+  }
+}
+
+script:post-response {
+  if (res.status === 201 || res.status === 200) {
+    bru.setEnvVar("product_id", res.body.data.id);
+  }
+}

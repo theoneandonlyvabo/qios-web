@@ -1,0 +1,29 @@
+meta {
+  name: Create Operator
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/business/operators
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{owner_token}}
+}
+
+body:json {
+  {
+    "name": "Kasir Satu",
+    "operator_code": "kasir01",
+    "password": "kasir123"
+  }
+}
+
+script:post-response {
+  if (res.status === 201 || res.status === 200) {
+    bru.setEnvVar("operator_id", res.body.data.id);
+  }
+}
