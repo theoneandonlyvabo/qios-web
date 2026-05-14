@@ -74,7 +74,7 @@ qios-web/
 │   ├── client/          → Next.js (frontend + mid-end)
 │   └── server/          → Go + Echo (backend)
 ├── docs/
-│   └── qios-api.yaml    → OpenAPI 3.0.3 — kontrak antara FE dan BE
+│   └── qios-api.yml    → OpenAPI 3.0.3 — kontrak antara FE dan BE
 ├── docker-compose.yml
 └── .env.example
 ```
@@ -485,7 +485,7 @@ feat: tambah endpoint POST /transactions
 fix: perbaiki type assertion panic di product handler
 refactor: pisah service dan repository di domain payment
 chore: update go dependencies
-docs: update qios-api.yaml dengan domain transaction
+docs: update qios-api.yml dengan domain transaction
 ```
 
 ---

@@ -2,9 +2,10 @@
 //
 // Middleware autentikasi dan otorisasi untuk semua protected routes.
 //
-// RequireAuth     — verifikasi Bearer JWT, inject claims ke context
-// RequireOwner    — pastikan role == "owner"
-// RequireOperator — pastikan role == "owner" atau "operator"
+// RequireAuth         — verifikasi Bearer JWT, inject claims ke context
+// RequireOwner        — pastikan role == "owner"
+// RequireOperator     — pastikan role == "owner" atau "operator"
+// RequireOperatorOnly — pastikan role == "operator" (bukan owner)
 //
 // Claims yang diinject ke context:
 //   "user_id"      string
@@ -65,6 +66,19 @@ func RequireOperator(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		role, _ := c.Get("role").(string)
 		if role != "owner" && role != "operator" {
+			return response.Forbidden(c)
+		}
+		return next(c)
+	}
+}
+
+// RequireOperatorOnly memastikan user yang login adalah operator (bukan owner).
+// Dipakai untuk endpoint khusus operator seperti /kasir/auth/logout.
+// Wajib dipanggil setelah RequireAuth.
+func RequireOperatorOnly(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		role, _ := c.Get("role").(string)
+		if role != "operator" {
 			return response.Forbidden(c)
 		}
 		return next(c)

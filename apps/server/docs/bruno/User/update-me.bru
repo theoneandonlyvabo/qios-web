@@ -1,0 +1,22 @@
+meta {
+  name: Update Me
+  type: http
+  seq: 2
+}
+
+patch {
+  url: {{base_url}}/user/me
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{owner_token}}
+}
+
+body:json {
+  {
+    "full_name": "Budi Santoso Updated",
+    "phone": "089876543210"
+  }
+}

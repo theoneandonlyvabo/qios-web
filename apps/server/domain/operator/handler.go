@@ -270,6 +270,12 @@ func (h *Handler) LoginWithCredentials(c echo.Context) error {
 	return response.OK(c, out)
 }
 
+// POST /kasir/auth/logout
+// Stateless JWT logout — client discards token. Middleware validates JWT before reaching here.
+func (h *Handler) Logout(c echo.Context) error {
+	return response.NoContent(c)
+}
+
 // POST /kasir/auth/login/qr
 func (h *Handler) LoginWithQR(c echo.Context) error {
 	var req QRLoginRequest
@@ -328,8 +334,12 @@ func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc
 	owner.DELETE("/:operator_id", h.DeleteOperator)
 	owner.POST("/:operator_id/regenerate-qr", h.RegenerateQR)
 
-	// Operator auth — public.
+	// Operator auth — public (no JWT required).
 	kasir := e.Group("/kasir/auth")
 	kasir.POST("/login", h.LoginWithCredentials)
 	kasir.POST("/login/qr", h.LoginWithQR)
+
+	// Operator auth — protected (valid operator JWT required).
+	kasirProtected := e.Group("/kasir/auth", authMiddleware, appmiddleware.RequireOperatorOnly)
+	kasirProtected.POST("/logout", h.Logout)
 }

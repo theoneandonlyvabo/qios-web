@@ -1,0 +1,15 @@
+meta {
+  name: Get Operator by ID
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/business/operators/{{operator_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{owner_token}}
+}

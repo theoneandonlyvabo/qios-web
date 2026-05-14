@@ -32,14 +32,14 @@ import (
 	appmiddleware "github.com/theoneandonlyvabo/qios-web/apps/server/platform/middleware"
 )
 
-// echoValidator membungkus go-playground/validator supaya kompatibel dengan
-// echo.Validator interface. Tanpa ini, c.Validate() akan panic.
+// echoValidator membungkus ( go-playground/validator ) supaya kompatibel dengan
+// echo.Validator interface. Tanpa ini, cev.Validate() akan panic.
 type echoValidator struct {
-	v *validator.Validate
+	validate *validator.Validate
 }
 
-func (ev *echoValidator) Validate(i any) error {
-	return ev.v.Struct(i)
+func (cev *echoValidator) Validate(input any) error {
+	return cev.validate.Struct(input)
 }
 
 func main() {
@@ -69,7 +69,7 @@ func main() {
 	// 5. Setup Echo
 	e := echo.New()
 	e.HideBanner = true
-	e.Validator = &echoValidator{v: validator.New()}
+	e.Validator = &echoValidator{validate: validator.New()}
 
 	// Middleware global
 	e.Use(echomiddleware.Logger())
