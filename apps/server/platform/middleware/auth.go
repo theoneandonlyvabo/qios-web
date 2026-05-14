@@ -2,9 +2,10 @@
 //
 // Middleware autentikasi dan otorisasi untuk semua protected routes.
 //
-// RequireAuth     — verifikasi Bearer JWT, inject claims ke context
-// RequireOwner    — pastikan role == "owner"
-// RequireOperator — pastikan role == "owner" atau "operator"
+// RequireAuth         — verifikasi Bearer JWT, inject claims ke context
+// RequireOwner        — pastikan role == "owner"
+// RequireOperator     — pastikan role == "owner" atau "operator"
+// RequireOperatorOnly — pastikan role == "operator" (bukan owner)
 //
 // Claims yang diinject ke context:
 //   "user_id"      string
