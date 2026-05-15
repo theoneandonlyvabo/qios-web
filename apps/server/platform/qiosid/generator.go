@@ -1,4 +1,4 @@
-// platform/qmid/generator.go
+// platform/qiosid/generator.go
 //
 // Generator QIOS ID untuk businesses. Format: QIOS-NNNNNN (6 digit, zero-padded).
 //
@@ -31,7 +31,7 @@ const (
 // Caller bertanggung jawab commit/rollback.
 func Generate(tx *sql.Tx) (string, error) {
 	if tx == nil {
-		return "", errors.New("qmid: tx is required")
+		return "", errors.New("qiosid: tx is required")
 	}
 
 	// FOR UPDATE memastikan row terbesar di-lock hingga akhir tx.
@@ -45,7 +45,7 @@ func Generate(tx *sql.Tx) (string, error) {
 	).Scan(&current)
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("qmid: failed to read last qios_id: %w", err)
+		return "", fmt.Errorf("qiosid: failed to read last qios_id: %w", err)
 	}
 
 	next := 1
@@ -70,18 +70,18 @@ func Format(n int) string {
 // Tetap berhasil meskipun zero-padding berbeda (mis. QIOS-1, QIOS-0000000001).
 func parseSequence(qiosID string) (int, error) {
 	if !strings.HasPrefix(qiosID, prefix) {
-		return 0, fmt.Errorf("qmid: invalid format %q (missing prefix)", qiosID)
+		return 0, fmt.Errorf("qiosid: invalid format %q (missing prefix)", qiosID)
 	}
 	suffix := strings.TrimPrefix(qiosID, prefix)
 	if suffix == "" {
-		return 0, fmt.Errorf("qmid: invalid format %q (empty suffix)", qiosID)
+		return 0, fmt.Errorf("qiosid: invalid format %q (empty suffix)", qiosID)
 	}
 	n, err := strconv.Atoi(suffix)
 	if err != nil {
-		return 0, fmt.Errorf("qmid: invalid format %q: %w", qiosID, err)
+		return 0, fmt.Errorf("qiosid: invalid format %q: %w", qiosID, err)
 	}
 	if n < 0 {
-		return 0, fmt.Errorf("qmid: invalid format %q (negative)", qiosID)
+		return 0, fmt.Errorf("qiosid: invalid format %q (negative)", qiosID)
 	}
 	return n, nil
 }

@@ -25,12 +25,11 @@ type registerRequest struct {
 }
 
 // registerResponse adalah body 201 Created.
-// Field qm_id dipertahankan untuk backward compat di JSON.
 type registerResponse struct {
 	AccessToken  string `json:"access_token"`
 	UserID       string `json:"user_id"`
 	BusinessID   string `json:"business_id"`
-	QMID         string `json:"qm_id"`
+	QiosID       string `json:"qios_id"`
 	XenditStatus string `json:"xendit_status"`
 }
 
@@ -64,7 +63,7 @@ func (h *Handler) Register(c echo.Context) error {
 		AccessToken:  out.AccessToken,
 		UserID:       out.UserID,
 		BusinessID:   out.BusinessID,
-		QMID:         out.QiosID,
+		QiosID:       out.QiosID,
 		XenditStatus: out.XenditStatus,
 	})
 }
