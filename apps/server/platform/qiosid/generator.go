@@ -12,7 +12,7 @@
 // Catatan: businesses adalah tabel append-only-on-create (qios_id tidak pernah
 // di-update setelah create), jadi MAX selalu monotonic.
 
-package qmid
+package qiosid
 
 import (
 	"database/sql"

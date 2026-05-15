@@ -24,7 +24,7 @@ import (
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/payment"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/jwt"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/qmid"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/qiosid"
 )
 
 const (
@@ -105,12 +105,12 @@ func (s *service) Login(ctx context.Context, email, password string) (*LoginResu
 // ----------------------------------------------------------------
 
 // Register mendaftarkan owner baru dalam satu transaksi:
-//   1. INSERT user
-//   2. Generate QIOS ID (dalam tx yang sama, FOR UPDATE)
-//   3. INSERT business dengan xendit_status = PENDING
-//   4. Call Xendit CreateSubAccount (network — di luar DB tapi sebelum commit)
-//   5. UPDATE business set xendit_account_id + status REGISTERED
-//   6. Commit
+//  1. INSERT user
+//  2. Generate QIOS ID (dalam tx yang sama, FOR UPDATE)
+//  3. INSERT business dengan xendit_status = PENDING
+//  4. Call Xendit CreateSubAccount (network — di luar DB tapi sebelum commit)
+//  5. UPDATE business set xendit_account_id + status REGISTERED
+//  6. Commit
 //
 // Kalau Xendit gagal, seluruh tx di-rollback (user + business tidak terbuat).
 // Setelah commit, terbitkan access + refresh token (kegagalan di sini tidak
@@ -144,7 +144,7 @@ func (s *service) Register(ctx context.Context, in RegisterInput) (*RegisterResu
 	}
 
 	// Step 2 — generate QIOS ID di dalam tx yang sama.
-	qiosIDValue, err := qmid.Generate(tx)
+	qiosIDValue, err := qiosid.Generate(tx)
 	if err != nil {
 		return nil, fmt.Errorf("auth service: generate qios id: %w", err)
 	}

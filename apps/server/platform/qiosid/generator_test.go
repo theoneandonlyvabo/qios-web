@@ -1,4 +1,4 @@
-package qmid
+package qiosid
 
 import (
 	"testing"
