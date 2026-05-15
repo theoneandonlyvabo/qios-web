@@ -356,8 +356,8 @@ Navigasi utama untuk owner yang akses dashboard.
 **UI Elements:**
 - Logo QIOS
 - Menu Items: Dashboard, Statistics, AI Analytics, History, Operators
-- User Info (bottom): Nama Bisnis, Avatar, Logout
 - Collapsible (Desktop), Drawer (Mobile)
+- User Info (bottom): Nama Bisnis, Avatar, Logout
 
 **Teknikal:**
 - Komponen global di `app/(dashboard)/layout.tsx`
@@ -712,6 +712,7 @@ refactor: pisahkan auth service dari handler
 - Flutter vs PWA untuk jangka panjang — MVP tetap PWA Android
 - Inventory management (C-18) — dijadwalkan post-MVP, schema belum final
 - LLM integration untuk AI Analytics — dijadwalkan post-MVP
+- Feature flag per `qm_id` — enforcement per-feature atau per-plan, granularitas, middleware vs service layer, edge case (expired/downgrade/grandfathering). Defer post-MVP. Seed data `plans` dan `subscriptions` (migration 004) tetap pending konfirmasi board sebelum ini bisa dilanjut.
 
 ---
 

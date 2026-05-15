@@ -41,7 +41,7 @@ func userIDFromCtx(c echo.Context) string {
 
 type businessInMe struct {
 	ID           string  `json:"id"`
-	QMID         string  `json:"qm_id"`
+	QiosID       string  `json:"qios_id"`
 	BusinessName string  `json:"business_name"`
 	Phone        *string `json:"phone"`
 	Address      *string `json:"address"`
@@ -69,14 +69,14 @@ func getMe(db *sql.DB) echo.HandlerFunc {
 
 		err := db.QueryRow(
 			`SELECT u.id, u.email, u.full_name, u.phone,
-			        b.id, b.qm_id, b.business_name, b.phone, b.address, b.city, b.country, b.xendit_status
+			        b.id, b.qios_id, b.business_name, b.phone, b.address, b.city, b.country, b.xendit_status
 			 FROM users u
 			 LEFT JOIN businesses b ON b.user_id = u.id
 			 WHERE u.id = $1`,
 			userID,
 		).Scan(
 			&res.ID, &res.Email, &res.FullName, &res.Phone,
-			&res.Business.ID, &res.Business.QMID, &res.Business.BusinessName,
+			&res.Business.ID, &res.Business.QiosID, &res.Business.BusinessName,
 			&res.Business.Phone, &res.Business.Address, &res.Business.City,
 			&res.Business.Country, &res.Business.XenditStatus,
 		)
@@ -133,7 +133,7 @@ func updateMe(db *sql.DB) echo.HandlerFunc {
 
 type businessResponse struct {
 	ID           string  `json:"id"`
-	QMID         string  `json:"qm_id"`
+	QiosID       string  `json:"qios_id"`
 	BusinessName string  `json:"business_name"`
 	Phone        *string `json:"phone"`
 	Address      *string `json:"address"`
@@ -148,11 +148,11 @@ func getBusiness(db *sql.DB) echo.HandlerFunc {
 
 		var res businessResponse
 		err := db.QueryRow(
-			`SELECT id, qm_id, business_name, phone, address, city, country, xendit_status
+			`SELECT id, qios_id, business_name, phone, address, city, country, xendit_status
 			 FROM businesses WHERE id = $1`,
 			businessID,
 		).Scan(
-			&res.ID, &res.QMID, &res.BusinessName, &res.Phone,
+			&res.ID, &res.QiosID, &res.BusinessName, &res.Phone,
 			&res.Address, &res.City, &res.Country, &res.XenditStatus,
 		)
 

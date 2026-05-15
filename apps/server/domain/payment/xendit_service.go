@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -102,6 +103,9 @@ func (s *XenditService) CreateSubAccount(
 	auth := base64.StdEncoding.EncodeToString([]byte(s.secretKey + ":"))
 	req.Header.Set("Authorization", "Basic "+auth)
 	req.Header.Set("Content-Type", "application/json")
+
+	log.Printf("xendit create account payload: %s", string(payload))
+	log.Printf("xendit create account url: %s", req.URL.String())
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {

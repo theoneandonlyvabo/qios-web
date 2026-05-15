@@ -1,4 +1,4 @@
-package qmid
+package qiosid
 
 import (
 	"testing"
@@ -9,10 +9,10 @@ func TestFormat(t *testing.T) {
 		in   int
 		want string
 	}{
-		{1, "QM-000001"},
-		{42, "QM-000042"},
-		{999_999, "QM-999999"},
-		{1_000_000, "QM-1000000"}, // overflow tetap render — schema VARCHAR(20) cukup
+		{1, "QIOS-000001"},
+		{42, "QIOS-000042"},
+		{999_999, "QIOS-999999"},
+		{1_000_000, "QIOS-1000000"}, // overflow tetap render — schema VARCHAR(20) cukup
 	}
 	for _, c := range cases {
 		got := Format(c.in)
@@ -28,13 +28,13 @@ func TestParseSequence(t *testing.T) {
 		want    int
 		wantErr bool
 	}{
-		{"QM-000001", 1, false},
-		{"QM-1", 1, false},
-		{"QM-999999", 999_999, false},
-		{"qm-000001", 0, true},  // wrong-case prefix
-		{"QIOS-000001", 0, true}, // wrong prefix
-		{"QM-", 0, true},
-		{"QM-abc", 0, true},
+		{"QIOS-000001", 1, false},
+		{"QIOS-1", 1, false},
+		{"QIOS-999999", 999_999, false},
+		{"qios-0000000001", 0, true}, // wrong-case prefix
+		{"QM-000001", 0, true},       // old format
+		{"QIOS-", 0, true},
+		{"QIOS-abc", 0, true},
 		{"", 0, true},
 	}
 	for _, c := range cases {
