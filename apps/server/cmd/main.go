@@ -85,7 +85,9 @@ func main() {
 	authMiddleware := appmiddleware.RequireAuth(jwtSvc)
 
 	// Auth domain — login, register, refresh, logout, Google OAuth.
-	auth.RegisterRoutes(e, db, cfg, jwtSvc, xenditSvc)
+	authRepo := auth.NewPostgresRepository(db)
+	authSvc := auth.NewService(db, authRepo, jwtSvc, xenditSvc)
+	auth.RegisterRoutes(e, auth.NewHandler(authSvc))
 
 	// User domain — profile + business info.
 	user.RegisterRoutes(e, db, authMiddleware)
