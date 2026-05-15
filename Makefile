@@ -1,6 +1,6 @@
-.PHONY: qios server client
+.PHONY: dev server client
 
-qios:
+dev:
 	npx concurrently --names "server,client" --prefix-colors "cyan,magenta" \
 		"cd apps/server && go run ./cmd/..." \
 		"cd apps/client && npm run dev"
