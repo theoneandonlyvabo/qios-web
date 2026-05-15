@@ -1,6 +1,6 @@
 // platform/qmid/generator.go
 //
-// Generator QM ID untuk businesses. Format: QM-NNNNNN (6 digit, zero-padded).
+// Generator QIOS ID untuk businesses. Format: QIOS-NNNNNN (6 digit, zero-padded).
 //
 // Race condition safety:
 //   Generator wajib dipanggil di dalam *sql.Tx yang sama dengan INSERT businesses,
@@ -9,7 +9,7 @@
 //   "SELECT MAX ... FOR UPDATE" supaya row-level lock mencegah dua tx
 //   meng-generate angka yang sama bersamaan.
 //
-// Catatan: businesses adalah tabel append-only-on-create (qm_id tidak pernah
+// Catatan: businesses adalah tabel append-only-on-create (qios_id tidak pernah
 // di-update setelah create), jadi MAX selalu monotonic.
 
 package qmid
@@ -23,11 +23,11 @@ import (
 )
 
 const (
-	prefix     = "QM-"
+	prefix     = "QIOS-"
 	digitWidth = 6
 )
 
-// Generate menghasilkan QM ID baru di dalam transaksi yang diberikan.
+// Generate menghasilkan QIOS ID baru di dalam transaksi yang diberikan.
 // Caller bertanggung jawab commit/rollback.
 func Generate(tx *sql.Tx) (string, error) {
 	if tx == nil {
@@ -38,14 +38,14 @@ func Generate(tx *sql.Tx) (string, error) {
 	// Pakai LIMIT 1 + ORDER BY DESC karena MAX() tidak bisa pakai FOR UPDATE.
 	var current sql.NullString
 	err := tx.QueryRow(
-		`SELECT qm_id FROM businesses
-		 ORDER BY qm_id DESC
+		`SELECT qios_id FROM businesses
+		 ORDER BY qios_id DESC
 		 LIMIT 1
 		 FOR UPDATE`,
 	).Scan(&current)
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("qmid: failed to read last qm_id: %w", err)
+		return "", fmt.Errorf("qmid: failed to read last qios_id: %w", err)
 	}
 
 	next := 1
@@ -60,28 +60,28 @@ func Generate(tx *sql.Tx) (string, error) {
 	return Format(next), nil
 }
 
-// Format mengembalikan QM ID dari angka sequence.
+// Format mengembalikan QIOS ID dari angka sequence.
 // Exported supaya bisa dipakai di test fixture atau seed data.
 func Format(n int) string {
 	return fmt.Sprintf("%s%0*d", prefix, digitWidth, n)
 }
 
-// parseSequence mem-parse angka di belakang prefix "QM-".
-// Tetap berhasil meskipun zero-padding berbeda (mis. QM-1, QM-000001).
-func parseSequence(qmID string) (int, error) {
-	if !strings.HasPrefix(qmID, prefix) {
-		return 0, fmt.Errorf("qmid: invalid format %q (missing prefix)", qmID)
+// parseSequence mem-parse angka di belakang prefix "QIOS-".
+// Tetap berhasil meskipun zero-padding berbeda (mis. QIOS-1, QIOS-0000000001).
+func parseSequence(qiosID string) (int, error) {
+	if !strings.HasPrefix(qiosID, prefix) {
+		return 0, fmt.Errorf("qmid: invalid format %q (missing prefix)", qiosID)
 	}
-	suffix := strings.TrimPrefix(qmID, prefix)
+	suffix := strings.TrimPrefix(qiosID, prefix)
 	if suffix == "" {
-		return 0, fmt.Errorf("qmid: invalid format %q (empty suffix)", qmID)
+		return 0, fmt.Errorf("qmid: invalid format %q (empty suffix)", qiosID)
 	}
 	n, err := strconv.Atoi(suffix)
 	if err != nil {
-		return 0, fmt.Errorf("qmid: invalid format %q: %w", qmID, err)
+		return 0, fmt.Errorf("qmid: invalid format %q: %w", qiosID, err)
 	}
 	if n < 0 {
-		return 0, fmt.Errorf("qmid: invalid format %q (negative)", qmID)
+		return 0, fmt.Errorf("qmid: invalid format %q (negative)", qiosID)
 	}
 	return n, nil
 }

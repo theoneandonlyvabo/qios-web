@@ -10,7 +10,7 @@
 
 CREATE TABLE IF NOT EXISTS businesses (
     id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    qm_id              VARCHAR(20)  NOT NULL UNIQUE,         -- format QM-000001, generate di application layer
+    qios_id            VARCHAR(20)  NOT NULL UNIQUE,         -- format QIOS-000001, generate di application layer
     user_id            UUID         NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     business_name      VARCHAR(255) NOT NULL,
     phone              VARCHAR(32),
@@ -32,5 +32,5 @@ CREATE TABLE IF NOT EXISTS businesses (
     updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_businesses_user_id ON businesses(user_id);
-CREATE INDEX IF NOT EXISTS idx_businesses_qm_id   ON businesses(qm_id);
+CREATE INDEX IF NOT EXISTS idx_businesses_user_id  ON businesses(user_id);
+CREATE INDEX IF NOT EXISTS idx_businesses_qios_id  ON businesses(qios_id);
