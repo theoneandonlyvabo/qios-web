@@ -61,8 +61,8 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 // dbStatus / domainStatus mapping case di boundary repo.
 // pos_orders.status disimpan lowercase (migration 008); domain enum uppercase.
 // Lihat AGENTS.md section 7 untuk konteks.
-func dbStatus(s OrderStatus) string       { return strings.ToLower(string(s)) }
-func domainStatus(s string) OrderStatus   { return OrderStatus(strings.ToUpper(s)) }
+func dbStatus(s OrderStatus) string     { return strings.ToLower(string(s)) }
+func domainStatus(s string) OrderStatus { return OrderStatus(strings.ToUpper(s)) }
 
 func (r *PostgresRepository) CreateWithItems(ctx context.Context, tx *sql.Tx, order *PosOrder, items []*OrderItem) error {
 	var operator uuid.NullUUID
