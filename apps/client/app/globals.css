@@ -8,6 +8,11 @@
   --color-brand-soft: #D93010;
   --color-brand-dim: rgba(204, 34, 0, 0.1);
 
+  /* Skalar design system tokens */
+  --color-charcoal: #1A1A1A;
+  --color-silver: #B9B9B9;
+  --color-tomato: #CA400A;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
