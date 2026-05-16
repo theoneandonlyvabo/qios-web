@@ -40,6 +40,10 @@ type Repository interface {
 	// untuk satu bisnis. Dipakai saat membuat QR dinamis atas nama merchant.
 	GetBusinessXenditAccount(ctx context.Context, businessID uuid.UUID) (accountID string, status XenditStatus, err error)
 
+	// GetBusinessQiosID mengembalikan qios_id (human-readable merchant code,
+	// mis. "QIOS-001234") dari businesses table. Dipakai untuk generate order_id.
+	GetBusinessQiosID(ctx context.Context, businessID uuid.UUID) (string, error)
+
 	// InsertXenditPayment mencatat record pembayaran Xendit yang dibuat untuk order.
 	// Dipanggil dari service saat QR berhasil di-generate; juga dari webhook saat
 	// notifikasi datang untuk order yang belum punya row xendit_payments.
@@ -294,6 +298,22 @@ func (r *PostgresRepository) GetBusinessXenditAccount(ctx context.Context, busin
 		return "", "", fmt.Errorf("payment: get business xendit: %w", err)
 	}
 	return accountID.String, XenditStatus(statusStr), nil
+}
+
+func (r *PostgresRepository) GetBusinessQiosID(ctx context.Context, businessID uuid.UUID) (string, error) {
+	var qiosID string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT qios_id
+		FROM businesses
+		WHERE id = $1`, businessID,
+	).Scan(&qiosID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrBusinessNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("payment: get business qios_id: %w", err)
+	}
+	return qiosID, nil
 }
 
 func (r *PostgresRepository) InsertXenditPayment(ctx context.Context, tx *sql.Tx, row *XenditPayment) error {

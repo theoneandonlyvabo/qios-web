@@ -83,8 +83,12 @@ func (s *service) CreateOrder(ctx context.Context, businessID, operatorID uuid.U
 		return nil, ErrInvalidTotal
 	}
 
-	// 2. Build order. order_id format: {business_id}-{unix_ts}-{random6}
-	orderIDStr, err := generateOrderID(businessID)
+	// 2. Build order. order_id format: {qios_id}-YYYYMMDD-{hex4}
+	qiosID, err := s.repo.GetBusinessQiosID(ctx, businessID)
+	if err != nil {
+		return nil, fmt.Errorf("payment service: lookup qios id: %w", err)
+	}
+	orderIDStr, err := generateOrderID(qiosID)
 	if err != nil {
 		return nil, fmt.Errorf("payment service: generate order id: %w", err)
 	}
@@ -254,14 +258,14 @@ func (s *service) CompleteCashOrder(ctx context.Context, businessID, orderID uui
 // Helpers
 // ----------------------------------------------------------------
 
-// generateOrderID returns "{business_id}-{unix_ts}-{random_hex6}".
-// Length: 36 + 1 + 10 + 1 + 12 = 60 chars — fits VARCHAR(100).
-func generateOrderID(businessID uuid.UUID) (string, error) {
-	buf := make([]byte, 6)
-	if _, err := rand.Read(buf); err != nil {
+// generateOrderID returns "{qios_id}-YYYYMMDD-{hex4}", e.g. QIOS-001234-20260516-a3f9.
+// qiosID berasal dari businesses.qios_id — caller wajib pass dari repo lookup.
+func generateOrderID(qiosID string) (string, error) {
+	var buf [2]byte
+	if _, err := rand.Read(buf[:]); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s-%d-%s", businessID.String(), time.Now().Unix(), hex.EncodeToString(buf)), nil
+	return fmt.Sprintf("%s-%s-%s", qiosID, time.Now().UTC().Format("20060102"), hex.EncodeToString(buf[:])), nil
 }
 
 func toOrderResponse(o *PosOrder, items []*OrderItem) *OrderResponse {

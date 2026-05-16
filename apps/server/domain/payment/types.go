@@ -61,7 +61,7 @@ type PosOrder struct {
 	ID            uuid.UUID     `json:"id"`
 	BusinessID    uuid.UUID     `json:"business_id"`
 	OperatorID    *uuid.UUID    `json:"operator_id,omitempty"`
-	OrderID       string        `json:"order_id"` // format: QIOS-YYYYMMDD-xxxx
+	OrderID       string        `json:"order_id"` // format: {qios_id}-YYYYMMDD-{hex4}, e.g. QIOS-001234-20260516-a3f9
 	TotalAmount   int64         `json:"total_amount"`
 	PaymentMethod PaymentMethod `json:"payment_method"`
 	Status        OrderStatus   `json:"status"`
