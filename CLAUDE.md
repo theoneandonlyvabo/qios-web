@@ -142,7 +142,7 @@ Migration bersifat **append-only** — file yang sudah ada tidak boleh diedit. P
 ### Flow Transaksi (Kasir)
 
 1. Operator pilih produk di interface kasir
-2. Server generate `order_id` unik (format: `QIOS-YYYYMMDD-xxxx`) dan simpan ke `pos_orders`
+2. Server generate `order_id` unik (format: `{qios_id}-YYYYMMDD-{hex4}`, contoh: `QIOS-001234-20260516-a3f9`) dan simpan ke `pos_orders`
 3. QR static Xendit milik merchant ditampilkan ke pembeli
 4. Pembeli scan dan bayar — `order_id` dikirim sebagai payment reference ke Xendit
 5. Xendit kirim webhook notifikasi ke server QIOS

@@ -240,6 +240,12 @@ domain/payment/
 └── webhook.go         # WebhookHandler + verifyCallbackToken + qrWebhookPayload
 ```
 
+**Repository interface methods:**
+- `CreateWithItems`, `FindByID`, `FindByOrderID`, `FindByBusinessID`, `UpdateStatus`
+- `GetBusinessXenditAccount` — xendit_account_id + status untuk QRIS flow
+- `GetBusinessQiosID` — qios_id dari businesses table, dipakai generate order_id
+- `InsertXenditPayment`, `MarkXenditPaymentPaid`
+
 Route ownership:
 | Endpoint | Method | File |
 |----------|--------|------|
@@ -255,6 +261,9 @@ Route ownership:
 ---
 
 ## 7. pos_orders Schema
+
+**`order_id` format:** `{qios_id}-YYYYMMDD-{hex4}` — contoh: `QIOS-001234-20260516-a3f9`.
+`qios_id` diambil dari `businesses.qios_id` via `repo.GetBusinessQiosID()` di service layer.
 
 **Migration 008 (existing):**
 - `id`, `business_id`, `operator_id`, `order_id`, `total_amount`, `status`, `note`, `paid_at`, `created_at`
