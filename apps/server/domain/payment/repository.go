@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -51,6 +52,10 @@ type Repository interface {
 
 	// MarkXenditPaymentPaid update row xendit_payments + raw_payload via order_id.
 	MarkXenditPaymentPaid(ctx context.Context, tx *sql.Tx, posOrderID uuid.UUID, status string, paidAt time.Time, raw []byte) error
+
+	// UpdateBusinessXenditStatus mengupdate xendit_status di tabel businesses
+	// berdasarkan xendit_account_id. Dipanggil dari webhook account.activated.
+	UpdateBusinessXenditStatus(ctx context.Context, xenditAccountID string, status XenditStatus) error
 }
 
 // PostgresRepository adalah implementasi Repository di atas database/sql.
@@ -215,69 +220,6 @@ func (r *PostgresRepository) UpdateStatus(ctx context.Context, tx *sql.Tx, id uu
 }
 
 // ----------------------------------------------------------------
-// Scan helpers
-// ----------------------------------------------------------------
-
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func (r *PostgresRepository) scanOrderRow(ctx context.Context, db *sql.DB, query string, arg any) (*PosOrder, error) {
-	row := db.QueryRowContext(ctx, query, arg)
-	o, _, err := scanOrder(row, false)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrOrderNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("payment: scan order: %w", err)
-	}
-	return o, nil
-}
-
-func scanOrderListRow(r rowScanner) (*PosOrder, int, error) {
-	o, count, err := scanOrder(r, true)
-	if err != nil {
-		return nil, 0, fmt.Errorf("payment: scan order list row: %w", err)
-	}
-	return o, count, nil
-}
-
-// scanOrder reads kolom standar pos_orders. Kalau withCount, tambahkan total_count di akhir.
-func scanOrder(r rowScanner, withCount bool) (*PosOrder, int, error) {
-	var (
-		o          PosOrder
-		operator   uuid.NullUUID
-		note       sql.NullString
-		paidAt     sql.NullTime
-		statusStr  string
-		methodStr  string
-		totalCount int
-	)
-	dests := []any{
-		&o.ID, &o.BusinessID, &operator, &o.OrderID, &o.TotalAmount,
-		&methodStr, &statusStr, &note, &paidAt, &o.CreatedAt, &o.UpdatedAt,
-	}
-	if withCount {
-		dests = append(dests, &totalCount)
-	}
-	if err := r.Scan(dests...); err != nil {
-		return nil, 0, err
-	}
-	if operator.Valid {
-		opID := operator.UUID
-		o.OperatorID = &opID
-	}
-	o.Note = note.String
-	o.PaymentMethod = PaymentMethod(methodStr)
-	o.Status = domainStatus(statusStr)
-	if paidAt.Valid {
-		t := paidAt.Time
-		o.PaidAt = &t
-	}
-	return &o, totalCount, nil
-}
-
-// ----------------------------------------------------------------
 // Business + xendit_payments queries
 // ----------------------------------------------------------------
 
@@ -371,6 +313,88 @@ func (r *PostgresRepository) MarkXenditPaymentPaid(ctx context.Context, tx *sql.
 		return ErrXenditPaymentNotFound
 	}
 	return nil
+}
+
+func (r *PostgresRepository) UpdateBusinessXenditStatus(ctx context.Context, xenditAccountID string, status XenditStatus) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE businesses
+		SET xendit_status = $1, updated_at = NOW()
+		WHERE xendit_account_id = $2`,
+		string(status), xenditAccountID,
+	)
+	if err != nil {
+		return fmt.Errorf("payment: update business xendit status: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		// Sub-account tidak dikenal — log saja, jangan fail.
+		// Bisa terjadi kalau webhook datang dari test event di Xendit dashboard.
+		log.Printf("payment: account.activated for unknown xendit_account_id=%s", xenditAccountID)
+	}
+	return nil
+}
+
+// ----------------------------------------------------------------
+// Scan helpers
+// ----------------------------------------------------------------
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func (r *PostgresRepository) scanOrderRow(ctx context.Context, db *sql.DB, query string, arg any) (*PosOrder, error) {
+	row := db.QueryRowContext(ctx, query, arg)
+	o, _, err := scanOrder(row, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrOrderNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("payment: scan order: %w", err)
+	}
+	return o, nil
+}
+
+func scanOrderListRow(r rowScanner) (*PosOrder, int, error) {
+	o, count, err := scanOrder(r, true)
+	if err != nil {
+		return nil, 0, fmt.Errorf("payment: scan order list row: %w", err)
+	}
+	return o, count, nil
+}
+
+// scanOrder reads kolom standar pos_orders. Kalau withCount, tambahkan total_count di akhir.
+func scanOrder(r rowScanner, withCount bool) (*PosOrder, int, error) {
+	var (
+		o          PosOrder
+		operator   uuid.NullUUID
+		note       sql.NullString
+		paidAt     sql.NullTime
+		statusStr  string
+		methodStr  string
+		totalCount int
+	)
+	dests := []any{
+		&o.ID, &o.BusinessID, &operator, &o.OrderID, &o.TotalAmount,
+		&methodStr, &statusStr, &note, &paidAt, &o.CreatedAt, &o.UpdatedAt,
+	}
+	if withCount {
+		dests = append(dests, &totalCount)
+	}
+	if err := r.Scan(dests...); err != nil {
+		return nil, 0, err
+	}
+	if operator.Valid {
+		opID := operator.UUID
+		o.OperatorID = &opID
+	}
+	o.Note = note.String
+	o.PaymentMethod = PaymentMethod(methodStr)
+	o.Status = domainStatus(statusStr)
+	if paidAt.Valid {
+		t := paidAt.Time
+		o.PaidAt = &t
+	}
+	return &o, totalCount, nil
 }
 
 func nullString(s string) sql.NullString {
