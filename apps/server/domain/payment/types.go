@@ -16,14 +16,15 @@ import (
 // Sentinel errors
 // ----------------------------------------------------------------
 
-var ErrOrderNotFound          = errors.New("order not found")
-var ErrOrderAlreadyPaid       = errors.New("order already paid")
-var ErrInvalidStatus          = errors.New("invalid order status transition")
-var ErrProductNotFound        = errors.New("product not found")
-var ErrInvalidTotal           = errors.New("order total must be greater than zero")
-var ErrBusinessNotFound       = errors.New("business not found")
-var ErrXenditNotActive        = errors.New("business xendit account is not active")
-var ErrXenditPaymentNotFound  = errors.New("xendit payment not found")
+var ErrOrderNotFound = errors.New("order not found")
+var ErrOrderAlreadyPaid = errors.New("order already paid")
+var ErrInvalidStatus = errors.New("invalid order status transition")
+var ErrProductNotFound = errors.New("product not found")
+var ErrInvalidTotal = errors.New("order total must be greater than zero")
+var ErrBusinessNotFound = errors.New("business not found")
+var ErrXenditNotActive = errors.New("business xendit account is not active")
+var ErrXenditPaymentNotFound = errors.New("xendit payment not found")
+var ErrXenditAlreadyActive = errors.New("xendit account already registered or active")
 
 // ----------------------------------------------------------------
 // Enums
@@ -100,6 +101,15 @@ type OrderItem struct {
 	Subtotal    int64      `json:"subtotal"` // generated: quantity * unit_price
 }
 
+// BusinessXenditInfo adalah data Xendit satu bisnis yang dibaca dari tabel businesses.
+// secret_key tidak diekspos ke luar repo — hanya accountID, apiKey, dan status yang dibutuhkan.
+type BusinessXenditInfo struct {
+	BusinessID      uuid.UUID
+	XenditAccountID string
+	XenditAPIKey    string
+	XenditStatus    XenditStatus
+}
+
 // ----------------------------------------------------------------
 // Request DTOs
 // ----------------------------------------------------------------
@@ -152,4 +162,18 @@ type OrderResponse struct {
 	Items         []OrderItemResponse `json:"items"`
 	CreatedAt     time.Time           `json:"created_at"`
 	QRString      string              `json:"qr_string,omitempty"`
+}
+
+// XenditStatusResponse adalah response GET /payment/xendit/status.
+type XenditStatusResponse struct {
+	XenditStatus    XenditStatus `json:"xendit_status"`
+	XenditAccountID string       `json:"xendit_account_id,omitempty"`
+	IsActive        bool         `json:"is_active"`
+}
+
+// XenditConnectResponse adalah response POST /payment/xendit/connect.
+type XenditConnectResponse struct {
+	XenditStatus    XenditStatus `json:"xendit_status"`
+	XenditAccountID string       `json:"xendit_account_id"`
+	Message         string       `json:"message"`
 }

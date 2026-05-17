@@ -1,0 +1,29 @@
+meta {
+  name: Register
+  type: http
+  seq: 1
+}
+
+http {
+  method: POST
+  url: {{base_url}}/auth/register
+  auth: none
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "test@qios.id",
+    "password": "password123",
+    "full_name": "Test Owner",
+    "phone": "08123456789",
+    "business_name": "Toko Test",
+    "address": "Jl. Test No. 1",
+    "city": "Jakarta",
+    "country": "ID"
+  }
+}

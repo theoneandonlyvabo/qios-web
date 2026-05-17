@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/domain/product"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/crypto"
 )
 
 // ProductLookup adalah small interface yang dibutuhkan payment service untuk
@@ -41,8 +42,15 @@ type Service interface {
 	ListOrders(ctx context.Context, businessID uuid.UUID, filter ListOrdersFilter) ([]*OrderResponse, int, error)
 
 	// CompleteCashOrder menyelesaikan order — operator menandai PAID secara manual.
-	// MVP tidak punya Xendit, jadi semua payment_method dikonfirmasi manual via endpoint ini.
 	CompleteCashOrder(ctx context.Context, businessID uuid.UUID, orderID uuid.UUID) (*OrderResponse, error)
+
+	// ConnectXendit membuat ulang sub-account Xendit untuk bisnis yang statusnya PENDING atau SUSPENDED.
+	// Dipakai sebagai error recovery kalau sub-account gagal dibuat saat register.
+	// Return ErrXenditAlreadyActive kalau status sudah REGISTERED atau ACTIVE.
+	ConnectXendit(ctx context.Context, businessID uuid.UUID, email, businessName string) (*XenditConnectResponse, error)
+
+	// GetXenditStatus mengambil status integrasi Xendit untuk satu bisnis.
+	GetXenditStatus(ctx context.Context, businessID uuid.UUID) (*XenditStatusResponse, error)
 }
 
 type service struct {
@@ -142,10 +150,6 @@ func (s *service) CreateOrder(ctx context.Context, businessID, operatorID uuid.U
 
 // generateAndRecordQR creates the Xendit QR for an order and inserts the
 // matching xendit_payments row in the same tx as the order itself.
-//
-// Wrapped in the order tx — if Xendit network call succeeds but commit fails,
-// the QR is orphaned at Xendit (matches the orphaned-sub-account tradeoff
-// documented in CLAUDE.md Onboarding Flow).
 func (s *service) generateAndRecordQR(ctx context.Context, tx *sql.Tx, businessID uuid.UUID, order *PosOrder) (string, error) {
 	accountID, status, err := s.repo.GetBusinessXenditAccount(ctx, businessID)
 	if err != nil {
@@ -192,7 +196,6 @@ func (s *service) GetOrder(ctx context.Context, businessID, orderID uuid.UUID) (
 		return nil, fmt.Errorf("payment service: get order: %w", err)
 	}
 	if order.BusinessID != businessID {
-		// Treat cross-business access as not found — jangan bocorkan keberadaan order.
 		return nil, ErrOrderNotFound
 	}
 	return toOrderResponse(order, items), nil
@@ -254,12 +257,71 @@ func (s *service) CompleteCashOrder(ctx context.Context, businessID, orderID uui
 	return toOrderResponse(order, items), nil
 }
 
+func (s *service) ConnectXendit(ctx context.Context, businessID uuid.UUID, email, businessName string) (*XenditConnectResponse, error) {
+	if s.xenditSvc == nil {
+		return nil, fmt.Errorf("payment service: xendit service not configured")
+	}
+
+	// Cek status sekarang. Tolak kalau sudah REGISTERED atau ACTIVE.
+	info, err := s.repo.GetBusinessXenditInfo(ctx, businessID)
+	if err != nil {
+		return nil, fmt.Errorf("payment service: get xendit info: %w", err)
+	}
+	if info.XenditStatus == StatusRegistered || info.XenditStatus == StatusActive {
+		return nil, ErrXenditAlreadyActive
+	}
+
+	// Buat sub-account baru.
+	result, err := s.xenditSvc.CreateSubAccount(ctx, ManagedAccountInput{
+		Email:        email,
+		BusinessName: businessName,
+		Country:      "ID",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("payment service: create xendit sub-account: %w", err)
+	}
+
+	// Enkripsi secret key sebelum simpan ke DB.
+	encryptedSecret, err := crypto.Encrypt(result.SecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("payment service: encrypt xendit secret: %w", err)
+	}
+
+	if err := s.repo.UpdateBusinessXenditCredentials(
+		ctx, businessID,
+		result.AccountID, result.APIKey, encryptedSecret,
+		StatusRegistered,
+	); err != nil {
+		return nil, fmt.Errorf("payment service: save xendit credentials: %w", err)
+	}
+
+	return &XenditConnectResponse{
+		XenditStatus:    StatusRegistered,
+		XenditAccountID: result.AccountID,
+		Message:         "Sub-account Xendit berhasil dibuat. KYC akan diproses oleh Xendit via email.",
+	}, nil
+}
+
+func (s *service) GetXenditStatus(ctx context.Context, businessID uuid.UUID) (*XenditStatusResponse, error) {
+	info, err := s.repo.GetBusinessXenditInfo(ctx, businessID)
+	if err != nil {
+		if errors.Is(err, ErrBusinessNotFound) {
+			return nil, ErrBusinessNotFound
+		}
+		return nil, fmt.Errorf("payment service: get xendit status: %w", err)
+	}
+	return &XenditStatusResponse{
+		XenditStatus:    info.XenditStatus,
+		XenditAccountID: info.XenditAccountID,
+		IsActive:        info.XenditStatus == StatusActive,
+	}, nil
+}
+
 // ----------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------
 
 // generateOrderID returns "{qios_id}-YYYYMMDD-{hex4}", e.g. QIOS-001234-20260516-a3f9.
-// qiosID berasal dari businesses.qios_id — caller wajib pass dari repo lookup.
 func generateOrderID(qiosID string) (string, error) {
 	var buf [2]byte
 	if _, err := rand.Read(buf[:]); err != nil {

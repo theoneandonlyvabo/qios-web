@@ -1,0 +1,33 @@
+meta {
+  name: Create QRIS Transaction
+  type: http
+  seq: 6
+}
+
+http {
+  method: POST
+  url: {{base_url}}/transactions
+  auth: bearer
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "payment_method": "QRIS",
+    "items": [
+      {
+        "product_id": "REPLACE_WITH_REAL_PRODUCT_UUID",
+        "quantity": 1
+      }
+    ],
+    "note": "Test QRIS order"
+  }
+}
