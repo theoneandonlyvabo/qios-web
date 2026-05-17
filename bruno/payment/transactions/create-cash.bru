@@ -1,0 +1,34 @@
+meta {
+  name: Create Cash Transaction
+  type: http
+  seq: 5
+}
+
+http {
+  method: POST
+  url: {{base_url}}/transactions
+  auth: bearer
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    // Replace product_id with a real UUID from POST /products
+    "payment_method": "CASH",
+    "items": [
+      {
+        "product_id": "REPLACE_WITH_REAL_PRODUCT_UUID",
+        "quantity": 2
+      }
+    ],
+    "note": "Test cash order"
+  }
+}

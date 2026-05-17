@@ -1,0 +1,16 @@
+meta {
+  name: Get Transaction By ID
+  type: http
+  seq: 8
+}
+
+http {
+  method: GET
+  url: {{base_url}}/transactions/{{order_id}}
+  auth: bearer
+  body: none
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
