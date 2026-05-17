@@ -4,11 +4,10 @@ meta {
   seq: 5
 }
 
-http {
-  method: POST
+post {
   url: {{base_url}}/transactions
-  auth: bearer
   body: json
+  auth: bearer
 }
 
 headers {
@@ -25,7 +24,7 @@ body:json {
     "payment_method": "CASH",
     "items": [
       {
-        "product_id": "REPLACE_WITH_REAL_PRODUCT_UUID",
+        "product_id": "74ca8741-3a90-4ef9-bbcb-c2bb68187f7d",
         "quantity": 2
       }
     ],
