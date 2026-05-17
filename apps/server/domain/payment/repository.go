@@ -56,6 +56,15 @@ type Repository interface {
 	// UpdateBusinessXenditStatus mengupdate xendit_status di tabel businesses
 	// berdasarkan xendit_account_id. Dipanggil dari webhook account.activated.
 	UpdateBusinessXenditStatus(ctx context.Context, xenditAccountID string, status XenditStatus) error
+
+	// GetBusinessXenditInfo mengambil full xendit info untuk satu bisnis.
+	// Dipakai GetXenditStatus handler dan ConnectXendit untuk cek status sebelum re-connect.
+	GetBusinessXenditInfo(ctx context.Context, businessID uuid.UUID) (*BusinessXenditInfo, error)
+
+	// UpdateBusinessXenditCredentials menyimpan credentials sub-account Xendit ke businesses.
+	// Dipanggil ConnectXendit setelah sub-account berhasil dibuat ulang.
+	// xendit_secret_key harus sudah dienkripsi sebelum dioper ke sini.
+	UpdateBusinessXenditCredentials(ctx context.Context, businessID uuid.UUID, accountID, apiKey, encryptedSecretKey string, status XenditStatus) error
 }
 
 // PostgresRepository adalah implementasi Repository di atas database/sql.
@@ -330,6 +339,51 @@ func (r *PostgresRepository) UpdateBusinessXenditStatus(ctx context.Context, xen
 		// Sub-account tidak dikenal — log saja, jangan fail.
 		// Bisa terjadi kalau webhook datang dari test event di Xendit dashboard.
 		log.Printf("payment: account.activated for unknown xendit_account_id=%s", xenditAccountID)
+	}
+	return nil
+}
+
+func (r *PostgresRepository) GetBusinessXenditInfo(ctx context.Context, businessID uuid.UUID) (*BusinessXenditInfo, error) {
+	var (
+		info      BusinessXenditInfo
+		accountID sql.NullString
+		apiKey    sql.NullString
+		statusStr string
+	)
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, xendit_account_id, xendit_api_key, xendit_status
+		FROM businesses
+		WHERE id = $1`, businessID,
+	).Scan(&info.BusinessID, &accountID, &apiKey, &statusStr)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrBusinessNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("payment: get business xendit info: %w", err)
+	}
+	info.XenditAccountID = accountID.String
+	info.XenditAPIKey = apiKey.String
+	info.XenditStatus = XenditStatus(statusStr)
+	return &info, nil
+}
+
+func (r *PostgresRepository) UpdateBusinessXenditCredentials(ctx context.Context, businessID uuid.UUID, accountID, apiKey, encryptedSecretKey string, status XenditStatus) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE businesses
+		SET xendit_account_id  = $1,
+		    xendit_api_key     = $2,
+		    xendit_secret_key  = $3,
+		    xendit_status      = $4,
+		    updated_at         = NOW()
+		WHERE id = $5`,
+		accountID, apiKey, encryptedSecretKey, string(status), businessID,
+	)
+	if err != nil {
+		return fmt.Errorf("payment: update business xendit credentials: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return ErrBusinessNotFound
 	}
 	return nil
 }

@@ -24,6 +24,13 @@ type body struct {
 	Error   string `json:"error,omitempty"`
 }
 
+type bodyWithMeta struct {
+	Success bool   `json:"success"`
+	Data    any    `json:"data"`
+	Meta    any    `json:"meta,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
 // ----------------------------------------------------------------
 // 2xx
 // ----------------------------------------------------------------
@@ -31,6 +38,11 @@ type body struct {
 // OK mengembalikan 200 dengan data.
 func OK(c echo.Context, data any) error {
 	return c.JSON(http.StatusOK, body{Success: true, Data: data})
+}
+
+// OKWithMeta mengembalikan 200 dengan data dan meta (pagination, total, dll).
+func OKWithMeta(c echo.Context, data any, meta any) error {
+	return c.JSON(http.StatusOK, bodyWithMeta{Success: true, Data: data, Meta: meta})
 }
 
 // Created mengembalikan 201 dengan data.

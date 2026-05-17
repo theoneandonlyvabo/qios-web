@@ -29,6 +29,11 @@ type Config struct {
 	JWTAccessExpiry  string
 	JWTRefreshExpiry string
 
+	// EncryptionKey adalah AES-256 key untuk enkripsi data sensitif di database
+	// (xendit_secret_key, dll). Harus 64 hex chars (= 32 bytes decoded).
+	// Pisah dari JWTSecret supaya rotation bisa dilakukan independen.
+	EncryptionKey string
+
 	// Xendit (xenPlatform). XenditSecretKey adalah master secret QIOS yang dipakai
 	// untuk membuat sub-account dan operasi platform-level lain. Setiap sub-account
 	// punya api_key/secret_key sendiri yang disimpan di tabel businesses.
@@ -57,6 +62,8 @@ func Load() *Config {
 		JWTAccessExpiry:  getEnv("JWT_ACCESS_EXPIRY", "15m"),
 		JWTRefreshExpiry: getEnv("JWT_REFRESH_EXPIRY", "720h"),
 
+		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
+
 		XenditSecretKey:         getEnv("XENDIT_SECRET_KEY", ""),
 		XenditEnv:               getEnv("XENDIT_ENV", "sandbox"),
 		XenditBaseURL:           getEnv("XENDIT_BASE_URL", "https://api.xendit.io"),
@@ -78,11 +85,17 @@ func (c *Config) Validate() error {
 	if c.XenditSecretKey == "" {
 		missing = append(missing, "XENDIT_SECRET_KEY")
 	}
+	if c.EncryptionKey == "" {
+		missing = append(missing, "ENCRYPTION_KEY")
+	}
 	if len(missing) > 0 {
 		return fmt.Errorf("config: required env vars not set: %v", missing)
 	}
 	if c.XenditEnv != "sandbox" && c.XenditEnv != "production" {
 		return errors.New(`config: XENDIT_ENV must be "sandbox" or "production"`)
+	}
+	if len(c.EncryptionKey) != 64 {
+		return errors.New("config: ENCRYPTION_KEY must be 64 hex chars (32 bytes)")
 	}
 	return nil
 }

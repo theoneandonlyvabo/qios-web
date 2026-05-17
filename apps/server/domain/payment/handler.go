@@ -4,13 +4,13 @@
 // Handler hanya parse input, call service, map error ke response.
 // Tidak ada SQL, tidak ada business logic.
 //
-// Endpoints yang akan diimplementasikan:
+// Endpoints:
 //   POST /transactions               → CreateOrder (operator)
 //   GET  /transactions               → ListOrders (owner)
 //   GET  /transactions/:id           → GetOrder (owner)
 //   POST /transactions/:id/complete  → CompleteCashOrder (operator)
-//   POST /payment/xendit/connect     → ConnectXendit (owner) — pindah dari domain/xendit/
-//   GET  /payment/xendit/status      → GetXenditStatus (owner) — pindah dari domain/xendit/
+//   POST /payment/xendit/connect     → ConnectXendit (owner)
+//   GET  /payment/xendit/status      → GetXenditStatus (owner)
 
 package payment
 
@@ -82,6 +82,16 @@ func validateCreateOrderRequest(req *CreateOrderRequest) string {
 	return ""
 }
 
+func validateConnectXenditRequest(req *connectXenditRequest) string {
+	if req.Email == "" {
+		return "email wajib diisi"
+	}
+	if req.BusinessName == "" {
+		return "business_name wajib diisi"
+	}
+	return ""
+}
+
 // ----------------------------------------------------------------
 // Transaction handlers
 // ----------------------------------------------------------------
@@ -127,11 +137,11 @@ func (h *Handler) ListOrders(c echo.Context) error {
 		Limit:     20,
 	}
 
-	orders, _, err := h.service.ListOrders(c.Request().Context(), businessID, filter)
+	orders, total, err := h.service.ListOrders(c.Request().Context(), businessID, filter)
 	if err != nil {
 		return response.Internal(c)
 	}
-	return response.OK(c, orders)
+	return response.OKWithMeta(c, orders, map[string]any{"total": total})
 }
 
 // GET /transactions/:id
@@ -173,18 +183,51 @@ func (h *Handler) CompleteCashOrder(c echo.Context) error {
 }
 
 // ----------------------------------------------------------------
-// Xendit connect/status (stub — pindah dari domain/xendit/)
-// Akan diimplementasikan saat Xendit integration sprint.
+// Xendit connect/status
 // ----------------------------------------------------------------
+
+// connectXenditRequest adalah body POST /payment/xendit/connect.
+// Email dan business_name dibutuhkan untuk membuat sub-account Xendit.
+// Biasanya diisi dari data bisnis yang sudah ada — owner tinggal konfirmasi.
+type connectXenditRequest struct {
+	Email        string `json:"email"`
+	BusinessName string `json:"business_name"`
+}
 
 // POST /payment/xendit/connect
 func (h *Handler) ConnectXendit(c echo.Context) error {
-	return response.NotImplemented(c, "connect xendit not yet implemented")
+	businessID, err := paymentBusinessIDFromCtx(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
+
+	var req connectXenditRequest
+	if err := c.Bind(&req); err != nil {
+		return response.BadRequest(c, "invalid request body")
+	}
+	if msg := validateConnectXenditRequest(&req); msg != "" {
+		return response.BadRequest(c, msg)
+	}
+
+	result, err := h.service.ConnectXendit(c.Request().Context(), businessID, req.Email, req.BusinessName)
+	if err != nil {
+		return mapPaymentError(c, err)
+	}
+	return response.OK(c, result)
 }
 
 // GET /payment/xendit/status
 func (h *Handler) GetXenditStatus(c echo.Context) error {
-	return response.NotImplemented(c, "xendit status not yet implemented")
+	businessID, err := paymentBusinessIDFromCtx(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
+
+	result, err := h.service.GetXenditStatus(c.Request().Context(), businessID)
+	if err != nil {
+		return mapPaymentError(c, err)
+	}
+	return response.OK(c, result)
 }
 
 // ----------------------------------------------------------------
@@ -205,6 +248,10 @@ func mapPaymentError(c echo.Context, err error) error {
 		return response.BadRequest(c, err.Error())
 	case errors.Is(err, ErrXenditNotActive):
 		return response.UnprocessableEntity(c, "Akun Xendit bisnis belum aktif untuk pembayaran QRIS")
+	case errors.Is(err, ErrXenditAlreadyActive):
+		return response.Conflict(c, "Akun Xendit sudah terdaftar atau aktif")
+	case errors.Is(err, ErrBusinessNotFound):
+		return response.NotFoundMsg(c, "Bisnis tidak ditemukan")
 	default:
 		return response.Internal(c)
 	}
@@ -214,9 +261,6 @@ func mapPaymentError(c echo.Context, err error) error {
 // Routes
 // ----------------------------------------------------------------
 
-// RegisterRoutes mendaftarkan semua endpoint payment domain ke Echo.
-// TODO: Setelah domain/xendit/ di-merge ke sini, xendit.RegisterRoutes
-//       di main.go harus dihapus dan diganti dengan payment.RegisterRoutes.
 func RegisterRoutes(e *echo.Echo, h *Handler, authMw echo.MiddlewareFunc) {
 	// Transaction endpoints
 	t := e.Group("/transactions", authMw)
