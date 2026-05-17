@@ -4,12 +4,17 @@ meta {
   seq: 3
 }
 
-get {
-  url: 
+post {
+  url: {{base_url}}/transactions/{{order_id}}/complete
   body: none
-  auth: inherit
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
 }
 
 settings {
   encodeUrl: true
+  timeout: 0
 }
