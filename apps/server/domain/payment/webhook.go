@@ -43,7 +43,7 @@ func NewWebhookHandler(db *sql.DB, repo Repository, webhookToken string) *Webhoo
 }
 
 // ----------------------------------------------------------------
-// Payload shapes (Xendit QR Code webhook — legacy event "qr.payment")
+// Payload shapes
 // ----------------------------------------------------------------
 
 // qrWebhookPayload adalah subset dari Xendit QR Code webhook body.
@@ -59,6 +59,16 @@ type qrWebhookPayload struct {
 		Amount      int64  `json:"amount"`
 		Status      string `json:"status"`
 		QRString    string `json:"qr_string"`
+	} `json:"data"`
+}
+
+// accountActivatedPayload adalah subset webhook account.activated dari Xendit.
+// Dikirim ketika merchant menyelesaikan KYC dan sub-account resmi aktif.
+type accountActivatedPayload struct {
+	Event string `json:"event"`
+	Data  struct {
+		ID     string `json:"id"`     // Xendit sub-account id (xendit_account_id di businesses)
+		Status string `json:"status"` // "ACTIVE"
 	} `json:"data"`
 }
 
@@ -78,16 +88,22 @@ func (h *WebhookHandler) HandleWebhook(c echo.Context) error {
 		return response.BadRequest(c, "cannot read body")
 	}
 
-	var payload qrWebhookPayload
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		// Xendit expects 200 untuk semua webhook yang sukses divalidasi.
-		// Payload tidak dikenali kita log tapi tidak fail.
+	// Parse event field saja dulu untuk routing.
+	var envelope struct {
+		Event string `json:"event"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
 		log.Printf("xendit webhook: cannot parse body: %v", err)
 		return response.OK(c, map[string]string{"status": "ignored"})
 	}
 
-	switch payload.Event {
+	switch envelope.Event {
 	case "qr.payment":
+		var payload qrWebhookPayload
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			log.Printf("xendit webhook: cannot parse qr.payment: %v", err)
+			return response.OK(c, map[string]string{"status": "ignored"})
+		}
 		if err := h.handleQRISPaid(c.Request().Context(), payload, raw); err != nil {
 			log.Printf("xendit webhook: qr.payment failed: %v", err)
 			if errors.Is(err, ErrOrderNotFound) {
@@ -98,9 +114,20 @@ func (h *WebhookHandler) HandleWebhook(c echo.Context) error {
 		}
 		return response.OK(c, map[string]string{"status": "processed"})
 
+	case "account.activated":
+		var payload accountActivatedPayload
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			log.Printf("xendit webhook: cannot parse account.activated: %v", err)
+			return response.OK(c, map[string]string{"status": "ignored"})
+		}
+		if err := h.handleAccountActivated(c.Request().Context(), payload); err != nil {
+			log.Printf("xendit webhook: account.activated failed: %v", err)
+			return response.Internal(c)
+		}
+		return response.OK(c, map[string]string{"status": "processed"})
+
 	default:
-		// Event lain (account.activated, dll) belum di-handle. Tetap 200.
-		log.Printf("xendit webhook: ignored event=%q", payload.Event)
+		log.Printf("xendit webhook: ignored event=%q", envelope.Event)
 		return response.OK(c, map[string]string{"status": "ignored"})
 	}
 }
@@ -166,6 +193,20 @@ func (h *WebhookHandler) handleQRISPaid(ctx context.Context, payload qrWebhookPa
 		return fmt.Errorf("webhook: commit: %w", err)
 	}
 	committed = true
+	return nil
+}
+
+// handleAccountActivated mengupdate xendit_status bisnis ke ACTIVE
+// saat KYC merchant selesai dan Xendit mengirim event account.activated.
+func (h *WebhookHandler) handleAccountActivated(ctx context.Context, payload accountActivatedPayload) error {
+	accountID := payload.Data.ID
+	if accountID == "" {
+		return fmt.Errorf("webhook: account.activated missing data.id")
+	}
+	if err := h.repo.UpdateBusinessXenditStatus(ctx, accountID, StatusActive); err != nil {
+		return fmt.Errorf("webhook: update xendit status: %w", err)
+	}
+	log.Printf("xendit webhook: account %s activated", accountID)
 	return nil
 }
 
