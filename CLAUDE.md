@@ -481,6 +481,10 @@ Semua env vars dibaca via `config.Load()` di startup. Tidak ada `os.Getenv()` la
 | `XENDIT_SECRET_KEY` | Master secret key Xendit (xenPlatform). Dipakai untuk Basic auth saat membuat sub-account dan operasi platform-level. **Wajib di-set** — startup gagal kalau kosong. | — |
 | `XENDIT_ENV` | `sandbox` atau `production` | `sandbox` |
 | `XENDIT_BASE_URL` | Override base URL Xendit (untuk testing/staging) | `https://api.xendit.io` |
+| `XENDIT_WEBHOOK_TOKEN` | Verifikasi header `x-callback-token` dari Xendit webhook (PG-05). Kalau kosong, endpoint `/webhooks/xendit` di-disable saat startup. | — |
+| `XENDIT_PLATFORM_ACCOUNT_ID` | Master account ID QIOS — reserved untuk audit/multi-platform | — |
+| `XENDIT_CALLBACK_URL` | Public URL endpoint `POST /webhooks/xendit` yang dipakai Xendit untuk kirim notifikasi pembayaran. Wajib pakai public URL (ngrok untuk dev) supaya Xendit bisa kirim webhook ke local. Kosong → fallback ke global webhook yang dikonfigurasi di Xendit dashboard. | — |
+| `ENCRYPTION_KEY` | AES-256 key (64 hex chars / 32 bytes) untuk enkripsi data sensitif di DB. **Wajib di-set**. | — |
 
 Buat file `.env` di `apps/server/` untuk local development. File ini tidak boleh di-commit — sudah ada di `.gitignore`.
 

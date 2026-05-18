@@ -16,6 +16,7 @@ package payment
 
 import (
 	"errors"
+	"log"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -46,10 +47,10 @@ func paymentBusinessIDFromCtx(c echo.Context) (uuid.UUID, error) {
 }
 
 func paymentOperatorIDFromCtx(c echo.Context) (uuid.UUID, error) {
-	raw, _ := c.Get("user_id").(string)
+	raw, _ := c.Get("operator_id").(string)
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, errors.New("invalid user_id in token")
+		return uuid.Nil, errors.New("invalid operator_id in token")
 	}
 	return id, nil
 }
@@ -117,6 +118,7 @@ func (h *Handler) CreateOrder(c echo.Context) error {
 
 	order, err := h.service.CreateOrder(c.Request().Context(), businessID, operatorID, req)
 	if err != nil {
+		log.Printf("CreateOrder error: %+v", err)
 		return mapPaymentError(c, err)
 	}
 	return response.Created(c, order)

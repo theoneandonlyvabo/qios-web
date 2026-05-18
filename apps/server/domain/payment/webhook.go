@@ -49,17 +49,17 @@ func NewWebhookHandler(db *sql.DB, repo Repository, webhookToken string) *Webhoo
 // qrWebhookPayload adalah subset dari Xendit QR Code webhook body.
 // Field lain disimpan di raw_payload JSONB — tidak perlu di-parse semua.
 type qrWebhookPayload struct {
-	Event      string `json:"event"`
-	BusinessID string `json:"business_id"` // Xendit sub-account id
-	Created    string `json:"created"`
-	Data       struct {
-		ID          string `json:"id"`           // Xendit QR/payment id
-		ReferenceID string `json:"reference_id"` // pos_orders.order_id
-		ExternalID  string `json:"external_id"`  // fallback ref jika reference_id kosong
-		Amount      int64  `json:"amount"`
-		Status      string `json:"status"`
-		QRString    string `json:"qr_string"`
-	} `json:"data"`
+	Event   string `json:"event"`
+	ID      string `json:"id"` // qrpy_xxx (payment id)
+	Amount  int64  `json:"amount"`
+	Status  string `json:"status"` // "COMPLETED" untuk sukses
+	Created string `json:"created"`
+	QRCode  struct {
+		ID         string `json:"id"`          // qr_xxx
+		ExternalID string `json:"external_id"` // pos_orders.order_id
+		QRString   string `json:"qr_string"`
+		Type       string `json:"type"`
+	} `json:"qr_code"`
 }
 
 // accountActivatedPayload adalah subset webhook account.activated dari Xendit.
@@ -144,12 +144,9 @@ func (h *WebhookHandler) verifyCallbackToken(c echo.Context) bool {
 
 // handleQRISPaid menandai order sebagai PAID atomik dengan update xendit_payments.
 func (h *WebhookHandler) handleQRISPaid(ctx context.Context, payload qrWebhookPayload, raw []byte) error {
-	orderRef := payload.Data.ReferenceID
+	orderRef := payload.QRCode.ExternalID
 	if orderRef == "" {
-		orderRef = payload.Data.ExternalID
-	}
-	if orderRef == "" {
-		return fmt.Errorf("webhook: missing reference_id")
+		return fmt.Errorf("webhook: missing external_id")
 	}
 
 	order, err := h.repo.FindByOrderID(ctx, orderRef)
@@ -169,7 +166,7 @@ func (h *WebhookHandler) handleQRISPaid(ctx context.Context, payload qrWebhookPa
 	}()
 
 	now := time.Now().UTC()
-	statusOK := paymentSuccess(payload.Data.Status)
+	statusOK := paymentSuccess(payload.Status)
 
 	if statusOK {
 		if err := h.repo.MarkXenditPaymentPaid(ctx, tx, order.ID, "PAID", now, raw); err != nil && !errors.Is(err, ErrXenditPaymentNotFound) {

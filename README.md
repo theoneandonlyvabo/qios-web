@@ -398,6 +398,11 @@ Handler tidak boleh sentuh DB. Service tidak boleh tau soal HTTP.
 | `JWT_REFRESH_EXPIRY` | `720h` | Durasi refresh token |
 | `XENDIT_SECRET_KEY` | — | Secret key Xendit |
 | `XENDIT_ENV` | `sandbox` | `sandbox` atau `production` |
+| `XENDIT_BASE_URL` | `https://api.xendit.io` | Override base URL Xendit API |
+| `XENDIT_WEBHOOK_TOKEN` | — | Verifikasi header `x-callback-token` dari webhook |
+| `XENDIT_PLATFORM_ACCOUNT_ID` | — | Master account ID QIOS |
+| `XENDIT_CALLBACK_URL` | — | Public URL `POST /webhooks/xendit` (ngrok untuk dev) — kosong = pakai global webhook di Xendit dashboard |
+| `ENCRYPTION_KEY` | — | 64 hex chars (32 bytes) untuk enkripsi data sensitif |
 
 ---
 
