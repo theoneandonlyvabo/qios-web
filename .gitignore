@@ -1,16 +1,26 @@
+# Environment variables
 .env
-.env.local
-.env.development
-.env.test
-.env.production
-.claude
+.env.*
+!.env.example
 
-node_modules
-dist
-build
-coverage
+# Tooling
+.claude/
 
-.DS_Store
+# API collections
+apps/server/bruno/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Logs & temporary files
 *.log
 *.cache
 *.tmp
+
+# OS files
+.DS_Store
