@@ -1,0 +1,32 @@
+meta {
+  name: Transact
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:8080/transactions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZjNkMGVmYTgtNWYzOC00MGEzLWJlZDItNjkxMzk1YTk4ZTU5Iiwib3BlcmF0b3JfaWQiOiJmM2QwZWZhOC01ZjM4LTQwYTMtYmVkMi02OTEzOTVhOThlNTkiLCJidXNpbmVzc19pZCI6IjQ3ZjYwNWRkLWI0N2UtNDdhMy1iZjViLTVjOTYzZGM2MDJmNyIsInJvbGUiOiJvcGVyYXRvciIsImV4cCI6MTc3OTEyNDk5NSwiaWF0IjoxNzc5MTI0MDk1fQ.RSjBC3LSMWtJyx42HLDYCqelc54zql9Mjxk_DnMtsdE
+}
+
+body:json {
+  {
+    "items": [
+      {
+        "product_id": "2ce4b637-1be0-48bc-9674-3a1f3c3df937",
+        "quantity": 1
+      }
+    ],
+    "payment_method": "QRIS"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

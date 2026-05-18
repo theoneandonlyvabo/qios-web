@@ -256,7 +256,9 @@ Route ownership:
 | `/payment/xendit/status` | GET | `handler.go` |
 | `/payment/xendit/webhook` | POST | `webhook.go` (belum di-register di main.go) |
 
-**Webhook registration deferred** — butuh `XENDIT_WEBHOOK_TOKEN` env var. Wire saat actual Xendit integration sprint.
+**Webhook env vars:**
+- `XENDIT_WEBHOOK_TOKEN` — verifikasi `x-callback-token` di handler. Kalau kosong, endpoint `/webhooks/xendit` di-disable saat startup.
+- `XENDIT_CALLBACK_URL` — public URL yang dipassed ke Xendit sebagai `callback_url` saat bikin QR. Wajib pakai public URL (ngrok untuk dev) supaya Xendit bisa kirim webhook ke local. Kosong → Xendit fallback ke global webhook di dashboard.
 
 ---
 
