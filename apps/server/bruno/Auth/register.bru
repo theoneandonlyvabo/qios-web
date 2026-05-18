@@ -1,0 +1,30 @@
+meta {
+  name: Register
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "owner@qios.dev",
+    "password": "password123",
+    "full_name": "Budi Santoso",
+    "phone": "081234567890",
+    "business_name": "Warung Budi",
+    "address": "Jl. Sudirman No. 1",
+    "city": "Jakarta",
+    "country": "Indonesia"
+  }
+}
+
+script:post-response {
+  if (res.status === 201 || res.status === 200) {
+    bru.setEnvVar("owner_token", res.body.data.access_token);
+  }
+}

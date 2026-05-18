@@ -6,9 +6,6 @@
 # Tooling
 .claude/
 
-# API collections
-apps/server/bruno/
-
 # Dependencies
 node_modules/
 

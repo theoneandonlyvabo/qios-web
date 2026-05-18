@@ -1,0 +1,15 @@
+meta {
+  name: Get Me
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/user/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{owner_token}}
+}

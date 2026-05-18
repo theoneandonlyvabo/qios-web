@@ -1,0 +1,22 @@
+meta {
+  name: Update Operator
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{base_url}}/business/operators/{{operator_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{owner_token}}
+}
+
+body:json {
+  {
+    "name": "Kasir Satu Updated",
+    "is_active": true
+  }
+}
