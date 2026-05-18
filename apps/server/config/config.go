@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -42,6 +43,11 @@ type Config struct {
 	XenditBaseURL           string // override opsional, default https://api.xendit.io
 	XenditWebhookToken      string // verifikasi header x-callback-token dari Xendit webhook
 	XenditPlatformAccountID string // master account ID QIOS — reserved untuk audit/multi-platform
+	// XenditCallbackURL adalah public URL endpoint webhook QIOS yang dipakai
+	// Xendit untuk kirim notifikasi pembayaran (qr.payment, dll). Di local dev
+	// biasanya pakai ngrok. Kalau kosong, Xendit fallback ke global webhook
+	// yang dikonfigurasi di dashboard.
+	XenditCallbackURL string
 }
 
 func Load() *Config {
@@ -69,6 +75,7 @@ func Load() *Config {
 		XenditBaseURL:           getEnv("XENDIT_BASE_URL", "https://api.xendit.io"),
 		XenditWebhookToken:      getEnv("XENDIT_WEBHOOK_TOKEN", ""),
 		XenditPlatformAccountID: getEnv("XENDIT_PLATFORM_ACCOUNT_ID", ""),
+		XenditCallbackURL:       getEnv("XENDIT_CALLBACK_URL", ""),
 	}
 }
 
@@ -96,6 +103,13 @@ func (c *Config) Validate() error {
 	}
 	if len(c.EncryptionKey) != 64 {
 		return errors.New("config: ENCRYPTION_KEY must be 64 hex chars (32 bytes)")
+	}
+	if c.XenditCallbackURL == "" {
+		// Bukan fatal — di local dev tanpa ngrok dev mungkin sengaja kosongin.
+		// Xendit akan fallback ke webhook global yang dikonfigurasi di dashboard.
+		log.Println("warning: XENDIT_CALLBACK_URL is empty — Xendit will use global dashboard webhook URL")
+	} else if !strings.HasPrefix(c.XenditCallbackURL, "https://") && !strings.HasPrefix(c.XenditCallbackURL, "http://") {
+		return errors.New(`config: XENDIT_CALLBACK_URL must start with "http://" or "https://"`)
 	}
 	return nil
 }

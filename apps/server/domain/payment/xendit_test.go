@@ -54,7 +54,7 @@ func TestCreateSubAccount_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc := NewXenditService(srv.URL, wantSecret, srv.Client())
+	svc := NewXenditService(srv.URL, wantSecret, "", srv.Client())
 	got, err := svc.CreateSubAccount(context.Background(), ManagedAccountInput{
 		Email:        "merchant@example.com",
 		BusinessName: "Toko Maju",
@@ -81,7 +81,7 @@ func TestCreateSubAccount_XenditError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc := NewXenditService(srv.URL, "secret", srv.Client())
+	svc := NewXenditService(srv.URL, "secret", "", srv.Client())
 	_, err := svc.CreateSubAccount(context.Background(), ManagedAccountInput{
 		Email:        "merchant@example.com",
 		BusinessName: "Toko",
@@ -95,7 +95,7 @@ func TestCreateSubAccount_XenditError(t *testing.T) {
 }
 
 func TestCreateSubAccount_ValidatesInput(t *testing.T) {
-	svc := NewXenditService("http://nope", "s", http.DefaultClient)
+	svc := NewXenditService("http://nope", "s", "", http.DefaultClient)
 	if _, err := svc.CreateSubAccount(context.Background(), ManagedAccountInput{}); err == nil {
 		t.Error("empty input: want error, got nil")
 	}
@@ -146,7 +146,7 @@ func TestCreateQRCode_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc := NewXenditService(srv.URL, wantSecret, srv.Client())
+	svc := NewXenditService(srv.URL, wantSecret, "", srv.Client())
 	got, err := svc.CreateQRCode(context.Background(), QRCodeInput{
 		AccountID:  wantSubAccount,
 		ExternalID: "order-abc",
@@ -173,7 +173,7 @@ func TestCreateQRCode_XenditError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc := NewXenditService(srv.URL, "s", srv.Client())
+	svc := NewXenditService(srv.URL, "s", "", srv.Client())
 	_, err := svc.CreateQRCode(context.Background(), QRCodeInput{
 		AccountID:  "acc_1",
 		ExternalID: "order-1",
@@ -185,7 +185,7 @@ func TestCreateQRCode_XenditError(t *testing.T) {
 }
 
 func TestCreateQRCode_ValidatesInput(t *testing.T) {
-	svc := NewXenditService("http://nope", "s", http.DefaultClient)
+	svc := NewXenditService("http://nope", "s", "", http.DefaultClient)
 	cases := []QRCodeInput{
 		{ExternalID: "x", Amount: 1},
 		{AccountID: "a", Amount: 1},

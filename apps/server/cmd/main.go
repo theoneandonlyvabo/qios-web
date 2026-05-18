@@ -69,7 +69,12 @@ func main() {
 		log.Fatalf("failed to init jwt service: %v", err)
 	}
 
-	xenditSvc := payment.NewXenditService(cfg.XenditBaseURL, cfg.XenditSecretKey, http.DefaultClient)
+	xenditSvc := payment.NewXenditService(
+		cfg.XenditBaseURL,
+		cfg.XenditSecretKey,
+		cfg.XenditCallbackURL,
+		http.DefaultClient,
+	)
 
 	// 6. Setup Echo
 	e := echo.New()

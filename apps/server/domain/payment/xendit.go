@@ -40,21 +40,23 @@ type HTTPClient interface {
 
 // XenditService adalah handle ke Xendit Platform API.
 type XenditService struct {
-	baseURL    string
-	secretKey  string
-	httpClient HTTPClient
+	baseURL     string
+	secretKey   string
+	callbackURL string
+	httpClient  HTTPClient
 }
 
 // NewXenditService konstruktor. baseURL biasanya "https://api.xendit.io".
 // secretKey adalah master secret key QIOS.
-func NewXenditService(baseURL, secretKey string, httpClient HTTPClient) *XenditService {
+func NewXenditService(baseURL, secretKey, callbackURL string, httpClient HTTPClient) *XenditService {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}
 	}
 	return &XenditService{
-		baseURL:    strings.TrimRight(baseURL, "/"),
-		secretKey:  secretKey,
-		httpClient: httpClient,
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		secretKey:   secretKey,
+		callbackURL: callbackURL,
+		httpClient:  httpClient,
 	}
 }
 
@@ -186,10 +188,11 @@ func (s *XenditService) CreateQRCode(ctx context.Context, input QRCodeInput) (*Q
 	}
 
 	body := map[string]any{
-		"external_id": input.ExternalID,
-		"type":        "DYNAMIC",
-		"currency":    "IDR",
-		"amount":      input.Amount,
+		"external_id":  input.ExternalID,
+		"type":         "DYNAMIC",
+		"currency":     "IDR",
+		"amount":       input.Amount,
+		"callback_url": s.callbackURL,
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
