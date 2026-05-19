@@ -20,12 +20,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
 
+	applogger "github.com/theoneandonlyvabo/qios-web/apps/server/platform/logger"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/response"
 )
 
@@ -93,7 +93,7 @@ func (h *WebhookHandler) HandleWebhook(c echo.Context) error {
 		Event string `json:"event"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
-		log.Printf("xendit webhook: cannot parse body: %v", err)
+		applogger.Warn("webhook: cannot parse body: %v", err)
 		return response.OK(c, map[string]string{"status": "ignored"})
 	}
 
@@ -101,39 +101,39 @@ func (h *WebhookHandler) HandleWebhook(c echo.Context) error {
 	case "qr.payment":
 		var payload qrWebhookPayload
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			log.Printf("xendit webhook: cannot parse qr.payment: %v", err)
+			applogger.Warn("webhook: cannot parse qr.payment: %v", err)
 			return response.OK(c, map[string]string{"status": "ignored"})
 		}
 		if err := h.handleQRISPaid(c.Request().Context(), payload, raw); err != nil {
-			log.Printf("xendit webhook: qr.payment failed: %v", err)
+			applogger.Error("webhook: qr.payment failed: %v", err)
 			if errors.Is(err, ErrOrderNotFound) {
-				// Tidak ada order — possibly test event. Return 200 supaya Xendit tidak retry.
 				return response.OK(c, map[string]string{"status": "no_match"})
 			}
 			return response.Internal(c)
 		}
+		applogger.Webhook("qr.payment", payload.QRCode.ExternalID, payload.Status, payload.Amount)
 		return response.OK(c, map[string]string{"status": "processed"})
 
 	case "account.activated":
 		var payload accountActivatedPayload
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			log.Printf("xendit webhook: cannot parse account.activated: %v", err)
+			applogger.Warn("webhook: cannot parse account.activated: %v", err)
 			return response.OK(c, map[string]string{"status": "ignored"})
 		}
 		if err := h.handleAccountActivated(c.Request().Context(), payload); err != nil {
-			log.Printf("xendit webhook: account.activated failed: %v", err)
+			applogger.Error("webhook: account.activated failed: %v", err)
 			return response.Internal(c)
 		}
+		applogger.Webhook("account.activated", payload.Data.ID, payload.Data.Status, 0)
 		return response.OK(c, map[string]string{"status": "processed"})
 
 	default:
-		log.Printf("xendit webhook: ignored event=%q", envelope.Event)
+		applogger.Info("webhook: ignored event=%q", envelope.Event)
 		return response.OK(c, map[string]string{"status": "ignored"})
 	}
 }
 
 // verifyCallbackToken memverifikasi x-callback-token header dari Xendit.
-// Xendit mengirim token ini di setiap webhook — harus cocok dengan XENDIT_WEBHOOK_TOKEN.
 func (h *WebhookHandler) verifyCallbackToken(c echo.Context) bool {
 	if h.webhookToken == "" {
 		return false
@@ -193,8 +193,7 @@ func (h *WebhookHandler) handleQRISPaid(ctx context.Context, payload qrWebhookPa
 	return nil
 }
 
-// handleAccountActivated mengupdate xendit_status bisnis ke ACTIVE
-// saat KYC merchant selesai dan Xendit mengirim event account.activated.
+// handleAccountActivated mengupdate xendit_status bisnis ke ACTIVE.
 func (h *WebhookHandler) handleAccountActivated(ctx context.Context, payload accountActivatedPayload) error {
 	accountID := payload.Data.ID
 	if accountID == "" {
@@ -203,12 +202,10 @@ func (h *WebhookHandler) handleAccountActivated(ctx context.Context, payload acc
 	if err := h.repo.UpdateBusinessXenditStatus(ctx, accountID, StatusActive); err != nil {
 		return fmt.Errorf("webhook: update xendit status: %w", err)
 	}
-	log.Printf("xendit webhook: account %s activated", accountID)
 	return nil
 }
 
 // paymentSuccess mengklasifikasi status string dari Xendit ke success/non-success.
-// Legacy QR API menggunakan COMPLETED/SUCCEEDED untuk sukses.
 func paymentSuccess(status string) bool {
 	switch strings.ToUpper(status) {
 	case "COMPLETED", "SUCCEEDED", "PAID", "SUCCESS":
@@ -219,7 +216,6 @@ func paymentSuccess(status string) bool {
 }
 
 // RegisterWebhookRoute mendaftarkan webhook endpoint ke Echo.
-// Tidak pakai authMiddleware — Xendit tidak bisa kirim Bearer token.
 func RegisterWebhookRoute(e *echo.Echo, h *WebhookHandler) {
 	e.POST("/webhooks/xendit", h.HandleWebhook)
 }

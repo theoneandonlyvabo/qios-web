@@ -1,4 +1,4 @@
-// domain/payment/xendit_service.go
+// domain/payment/xendit.go
 //
 // Xendit service — wrapper untuk Xendit Platform API.
 //
@@ -27,10 +27,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	applogger "github.com/theoneandonlyvabo/qios-web/apps/server/platform/logger"
 )
 
 // HTTPClient adalah subset dari *http.Client supaya bisa di-mock di test.
@@ -106,8 +107,7 @@ func (s *XenditService) CreateSubAccount(
 	req.Header.Set("Authorization", "Basic "+auth)
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Printf("xendit create account payload: %s", string(payload))
-	log.Printf("xendit create account url: %s", req.URL.String())
+	applogger.Info("xendit create account: %s %s", req.Method, req.URL.String())
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -207,6 +207,8 @@ func (s *XenditService) CreateQRCode(ctx context.Context, input QRCodeInput) (*Q
 	req.Header.Set("Authorization", "Basic "+auth)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("for-user-id", input.AccountID)
+
+	applogger.Info("xendit create qr: external_id=%s amount=%d", input.ExternalID, input.Amount)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {

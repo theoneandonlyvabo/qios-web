@@ -31,6 +31,7 @@ import (
 	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/crypto"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/database"
 	appjwt "github.com/theoneandonlyvabo/qios-web/apps/server/platform/jwt"
+	applogger "github.com/theoneandonlyvabo/qios-web/apps/server/platform/logger"
 	appmiddleware "github.com/theoneandonlyvabo/qios-web/apps/server/platform/middleware"
 )
 
@@ -81,7 +82,7 @@ func main() {
 	e.HideBanner = true
 	e.Validator = &echoValidator{validate: validator.New()}
 
-	e.Use(echomiddleware.Logger())
+	e.Use(applogger.Middleware())
 	e.Use(echomiddleware.Recover())
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOrigins:     []string{"http://localhost:3000"},
@@ -116,13 +117,13 @@ func main() {
 		webhookHandler := payment.NewWebhookHandler(db, paymentRepo, cfg.XenditWebhookToken)
 		payment.RegisterWebhookRoute(e, webhookHandler)
 	} else {
-		log.Println("XENDIT_WEBHOOK_TOKEN not set — /webhooks/xendit disabled")
+		applogger.Warn("XENDIT_WEBHOOK_TOKEN not set — /webhooks/xendit disabled")
 	}
 
 	dashboard.RegisterRoutes(e, dashboard.NewHandler(), authMiddleware)
 
 	// 8. Start server
-	log.Printf("server starting on port %s", cfg.AppPort)
+	applogger.Info("server starting on port %s", cfg.AppPort)
 	if err := e.Start(":" + cfg.AppPort); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
