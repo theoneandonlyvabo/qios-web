@@ -18,6 +18,7 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 
@@ -83,6 +84,11 @@ func main() {
 	e.Validator = &echoValidator{validate: validator.New()}
 
 	e.Use(applogger.Middleware())
+	e.Use(echoprometheus.NewMiddleware("qios"))
+	e.GET("/metrics", echoprometheus.NewHandler())
+	e.GET("/health", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	})
 	e.Use(echomiddleware.Recover())
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOrigins:     []string{"http://localhost:3000"},

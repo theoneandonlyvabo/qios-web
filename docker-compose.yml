@@ -1,4 +1,6 @@
-# docker-compose.yml
+networks:
+  qios-shared:
+    external: true
 
 services:
 
@@ -11,9 +13,13 @@ services:
     environment:
       - NODE_ENV=production
       - API_BASE_URL=http://server:8080
+    labels:
+      logging: "promtail"
     depends_on:
       - server
     restart: unless-stopped
+    networks:
+      - ${APP_NAME}-shared
 
   server:
     build:
@@ -36,10 +42,16 @@ services:
       - XENDIT_BASE_URL=${XENDIT_BASE_URL}
       - XENDIT_WEBHOOK_TOKEN=${XENDIT_WEBHOOK_TOKEN}
       - XENDIT_PLATFORM_ACCOUNT_ID=${XENDIT_PLATFORM_ACCOUNT_ID}
+    labels:
+      logging: "promtail"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - ${APP_NAME}-shared
 
   postgres:
     image: postgres:16-alpine
@@ -49,6 +61,8 @@ services:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
+    labels:
+      logging: "promtail"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -57,6 +71,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - ${APP_NAME}-shared
 
 volumes:
   pgdata:

@@ -1,19 +1,8 @@
-# infra/docker-compose.yml
-#
-# Stack observability QIOS:
-#   - Prometheus  : scrape metrics dari Go server (port 9090)
-#   - Loki        : agregasi log (port 3100)
-#   - Grafana     : dashboard visual, konek ke Prometheus + Loki (port 3000)
-#   - Uptime Kuma : monitor uptime endpoint (port 3001)
-#
-# Jalanin: docker compose up -d
-# Grafana default login: admin / admin (ganti setelah first login)
-
-version: "3.9"
-
 networks:
   qios-infra:
     driver: bridge
+  qios-shared:
+    external: true
 
 volumes:
   prometheus_data:
@@ -25,45 +14,77 @@ services:
   # ─── Prometheus ───────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.51.2
-    container_name: qios-prometheus
+    container_name: ${APP_NAME}-prometheus
     restart: unless-stopped
+    labels:
+      logging: "promtail"
+    environment:
+      - APP_NAME=${APP_NAME}
+      - APP_CONTAINER=${APP_CONTAINER}
+      - APP_PORT=${APP_PORT}
+      - APP_METRICS_PATH=${APP_METRICS_PATH}
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/prometheus.yml.tmpl:/etc/prometheus/prometheus.yml.tmpl:ro
       - prometheus_data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=15d"
-      - "--web.enable-lifecycle"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        envsubst < /etc/prometheus/prometheus.yml.tmpl > /etc/prometheus/prometheus.yml
+        exec /bin/prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=${PROMETHEUS_RETENTION} \
+          --web.enable-lifecycle
     ports:
       - "9090:9090"
     networks:
-      - qios-infra
+      - ${APP_NAME}-infra
+      - ${APP_NAME}-shared
 
   # ─── Loki ─────────────────────────────────────────────────────────────────
   loki:
     image: grafana/loki:2.9.7
-    container_name: qios-loki
+    container_name: ${APP_NAME}-loki
     restart: unless-stopped
+    labels:
+      logging: "promtail"
     volumes:
       - ./loki/loki.yml:/etc/loki/loki.yml:ro
       - loki_data:/loki
-    command: -config.file=/etc/loki/loki.yml
+    command: -config.file=/etc/loki/loki.yml -retention-period=${LOKI_RETENTION}
     ports:
       - "3100:3100"
     networks:
-      - qios-infra
+      - ${APP_NAME}-infra
+
+  # ─── Promtail ─────────────────────────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:2.9.7
+    container_name: ${APP_NAME}-promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/promtail.yml
+    depends_on:
+      - loki
+    networks:
+      - ${APP_NAME}-infra
+      - ${APP_NAME}-shared
 
   # ─── Grafana ──────────────────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:10.4.2
-    container_name: qios-grafana
+    container_name: ${APP_NAME}-grafana
     restart: unless-stopped
+    labels:
+      logging: "promtail"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -73,16 +94,19 @@ services:
       - prometheus
       - loki
     networks:
-      - qios-infra
+      - ${APP_NAME}-infra
+      - ${APP_NAME}-shared
 
   # ─── Uptime Kuma ──────────────────────────────────────────────────────────
   uptime-kuma:
     image: louislam/uptime-kuma:1
-    container_name: qios-uptime
+    container_name: ${APP_NAME}-uptime
     restart: unless-stopped
+    labels:
+      logging: "promtail"
     volumes:
       - uptime_kuma_data:/app/data
     ports:
       - "3001:3001"
     networks:
-      - qios-infra
+      - ${APP_NAME}-infra

@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "${APP_NAME}-server"
+    static_configs:
+      - targets: ["${APP_CONTAINER}:${APP_PORT}"]
+    metrics_path: ${APP_METRICS_PATH}
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

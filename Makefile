@@ -26,3 +26,11 @@ down-v:
 # Jalankan semua via Docker Compose (production-like).
 compose:
 	docker compose up --build
+
+# Jalankan observability stack (Prometheus, Loki, Grafana, Uptime Kuma).
+monitor:
+	cd infra && docker compose up -d
+
+# Hentikan observability stack.
+monitor-down:
+	cd infra && docker compose down

@@ -65,6 +65,9 @@ func webhookStatusColor(status string) string {
 func Middleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			if c.Request().URL.Path == "/metrics" {
+				return next(c)
+			}
 			start := time.Now()
 			err := next(c)
 
