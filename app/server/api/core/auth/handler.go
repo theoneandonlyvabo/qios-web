@@ -22,7 +22,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/response"
+	"github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/response"
 )
 
 const refreshTokenCookieName = "refresh_token"
@@ -160,9 +160,6 @@ func mapServiceError(c echo.Context, err error) error {
 		return response.Conflict(c, "email sudah terdaftar")
 	case errors.Is(err, ErrQiosIDCollision):
 		return response.Conflict(c, "qios_id collision, silakan coba lagi")
-	case errors.Is(err, ErrXenditCreate):
-		c.Logger().Errorf("auth: xendit create account failed: %v", err)
-		return response.UnprocessableEntity(c, "gagal membuat akun pembayaran, coba lagi")
 	default:
 		return response.Internal(c)
 	}

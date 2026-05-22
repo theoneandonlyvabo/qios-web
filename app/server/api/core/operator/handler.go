@@ -28,8 +28,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	appmiddleware "github.com/theoneandonlyvabo/qios-web/apps/server/platform/middleware"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/response"
+	appmiddleware "github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/middleware"
+	"github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/response"
 )
 
 type Handler struct {

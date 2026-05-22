@@ -6,7 +6,7 @@ import (
 	"database/sql"
 
 	"github.com/labstack/echo/v4"
-	appmiddleware "github.com/theoneandonlyvabo/qios-web/apps/server/platform/middleware"
+	appmiddleware "github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/middleware"
 )
 
 func RegisterRoutes(e *echo.Echo, db *sql.DB, authMiddleware echo.MiddlewareFunc) {

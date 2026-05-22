@@ -14,7 +14,6 @@ func RegisterRoutes(e *echo.Echo, h *Handler) {
 	auth := e.Group("/auth")
 
 	// Owner
-	auth.POST("/register", h.Register)
 	auth.POST("/login", h.Login)
 	auth.POST("/refresh", h.Refresh)
 	auth.POST("/logout", h.Logout)

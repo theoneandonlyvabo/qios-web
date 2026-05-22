@@ -18,7 +18,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/theoneandonlyvabo/qios-web/apps/server/platform/response"
+	"github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/response"
 )
 
 // ----------------------------------------------------------------

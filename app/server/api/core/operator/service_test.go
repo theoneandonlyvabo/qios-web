@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/config"
-	appjwt "github.com/theoneandonlyvabo/qios-web/apps/server/platform/jwt"
+	"github.com/theoneandonlyvabo/qios-web/app/server/api/config"
+	appjwt "github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/jwt"
 	"golang.org/x/crypto/bcrypt"
 )
 

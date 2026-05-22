@@ -12,7 +12,7 @@ import (
 	"log"
 
 	_ "github.com/lib/pq"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/config"
+	"github.com/theoneandonlyvabo/qios-web/app/server/api/config"
 )
 
 func Connect(cfg *config.Config) *sql.DB {
