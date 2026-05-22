@@ -176,7 +176,7 @@ PWA operator menambahkan `Permissions-Policy: camera=(self)` karena butuh akses 
 
 ### Server — API (Go + Echo)
 
-**Stack:** Go 1.26.2, Echo v4, PostgreSQL 16, `lib/pq`, `golang-jwt`, `godotenv`
+**Stack:** Go 1.25, Echo v4, PostgreSQL 16, `lib/pq`, `golang-jwt`, `godotenv`
 
 **Path:** `app/server/api/`
 
@@ -188,12 +188,10 @@ app/server/api/
 ├── config/                 # config.go — load semua env vars ke struct Config
 ├── core/                   # business + view domains
 │   ├── auth/               # owner login, Google OAuth, refresh, logout
-│   ├── user/               # profil owner
-│   ├── business/           # detail business + update terbatas
+│   ├── user/               # profil owner + business info (GET/PATCH /business)
 │   ├── operator/           # CRUD operator (owner-side) + login PWA operator
 │   ├── product/            # read-only owner endpoint
-│   ├── transaction/        # order create, confirm, void
-│   ├── consumption/        # consumption_log management (background)
+│   ├── transaction/        # order create, confirm, void + consumption_log
 │   ├── dashboard/          # view: summary, trend, peak hours, top products
 │   ├── analytics/          # view: deeper dive dengan custom timeframe + comparison
 │   ├── report/             # view: daily/monthly sales, consumption, export
@@ -208,6 +206,8 @@ app/server/api/
     ├── qmid/               # generator QM-NNNNNN merchant ID
     └── encryption/         # AES-256 untuk data sensitif (placeholder)
 ```
+
+> **Implementasi saat ini:** Domain `business/` di-merge ke dalam `user/` domain (owner satu bisnis). Domain `consumption/` di-handle sebagai background step di dalam `transaction/` domain saat status CONFIRMED. Struktur folder di atas adalah target spec — actual folder: `auth`, `user`, `operator`, `product`, `transaction`, `dashboard`, `analytics`, `report`, `insight`, `admin`.
 
 **Konvensi domain:**
 
@@ -245,7 +245,7 @@ API collection di-commit ke repo untuk shared testing antar dev. Update saat ada
 
 ### Database — PostgreSQL 16
 
-Dijalankan via Docker. Migration dikelola secara manual menggunakan `migrate.go` berbasis file `.sql` bernomor urut di folder `app/server/api/migrations/` (atau lokasi yang dipilih tim). Migration bersifat **append-only** — file yang sudah ada tidak boleh diedit.
+Dijalankan via Docker. Migration dikelola secara manual menggunakan `migrate.go` berbasis file `.sql` bernomor urut di folder **`infra/database/migrations/`**. Migration bersifat **append-only** — file yang sudah ada tidak boleh diedit.
 
 ### Flow Transaksi (Operator)
 
@@ -319,7 +319,7 @@ Setiap perubahan endpoint **harus diupdate di `docs/qios-api.yml` terlebih dahul
 
 ## Database Schema
 
-12 migration files (target state v0.4). Migration di-reset karena pivot Mei 2026 terlalu gede untuk di-patch di belakang. Versi sebelumnya (yang sudah ada Xendit references) di-archive di branch terpisah.
+Target state v0.4 memerlukan 12 migration files baru. Migration reset dari schema lama (Xendit-era) ke schema v0.4 **belum dilakukan** — file di `infra/database/migrations/` saat ini masih berisi schema lama (includes `xendit_payments`, `webhook_events`, dll dari branch `old-dev-xendit`). Schema v0.4 di bawah adalah **target spec** untuk migration reset yang akan datang. Versi lama di-archive di branch `old-dev-xendit`.
 
 | File | Tabel | Keterangan |
 |------|-------|------------|
@@ -723,7 +723,7 @@ cp app/server/api/.env.example app/server/api/.env
 
 **3. Jalankan PostgreSQL via Docker:**
 ```bash
-docker compose up postgres -d
+docker compose -f infra/docker-compose.yml up postgres -d
 ```
 
 **4. Jalankan api server:**
@@ -764,87 +764,92 @@ go run ./cmd/seed
 
 ## Sprint Roadmap (2 Bulan MVP)
 
+> Legend: ✅ selesai · 🔄 in progress · ⏳ belum mulai
+
 ### Week 1 — Foundation
 
 **Backend (api):**
-1. Finalisasi semua migration baru (001-011)
-2. Auth endpoints live: owner + operator + admin login, refresh, logout
-3. Seed data: 1 admin Skalar account, 1 dummy business + owner + operator + 3 produk
-4. Middleware JWT scope per role
+1. ✅ Auth endpoints live: owner + operator + admin login, refresh, logout
+2. ✅ Middleware JWT scope per role (RequireAuth, RequireAdmin)
+3. ⏳ Finalisasi migration reset ke schema v0.4 (001-012 baru)
+4. ⏳ Seed data: 1 admin Skalar account, 1 dummy business + owner + operator + 3 produk
 
 **Frontend Dashboard (Dev 1):**
-1. Setup Next.js, folder structure, Tailwind config
-2. Design system: warna (warm dark/light dengan accent Ferrari red), font Plus Jakarta Sans, komponen atom
-3. Layout shell: sidebar + route guard
-4. Login page (static dulu)
+1. ⏳ Setup Next.js, folder structure, Tailwind config
+2. ⏳ Design system: warna (warm dark/light dengan accent Ferrari red), font Plus Jakarta Sans, komponen atom
+3. ⏳ Layout shell: sidebar + route guard
+4. ⏳ Login page (static dulu)
 
 **Frontend Operator (Dev 3):**
-1. Setup Next.js PWA-ready, mobile-first layout
-2. Login page (QR camera scan + credential fallback)
+1. ⏳ Setup Next.js PWA-ready, mobile-first layout
+2. ⏳ Login page (QR camera scan + credential fallback)
 
 **Frontend Admin (Dev 2 part-time):**
-1. Setup Next.js, basic layout, login page
+1. ⏳ Setup Next.js, basic layout, login page
 
 ### Week 2 — Core Pages Static
 
 **Backend:**
-1. Business domain: GET/PATCH owner-side
-2. Operator domain: full CRUD owner-side + login PWA operator
-3. Product domain: GET owner-side, full CRUD admin-side (dengan recipe nested)
-4. Transaction domain: POST (create PENDING), POST confirm, POST void
+1. ✅ Business domain: GET/PATCH owner-side (di dalam `user/` domain)
+2. ✅ Operator domain: full CRUD owner-side + login PWA operator
+3. ✅ Product domain: GET owner-side, full CRUD admin-side (dengan recipe nested)
+4. ✅ Transaction domain: POST (create PENDING), POST confirm, POST void
+5. ✅ QRIS static payload: disimpan di businesses, dikembalikan saat confirm
 
 **Frontend Dashboard (Dev 1):**
-1. Connect login ke API
-2. Dashboard page dengan mock data
-3. Operators page (CRUD)
+1. ⏳ Connect login ke API
+2. ⏳ Dashboard page dengan mock data
+3. ⏳ Operators page (CRUD)
 
 **Frontend Operator (Dev 3):**
-1. Order page: list produk, cart logic
-2. Confirm page: pilih payment, slide-to-confirm gesture
+1. ⏳ Order page: list produk, cart logic
+2. ⏳ Confirm page: pilih payment, slide-to-confirm gesture
 
 **Frontend Admin (Dev 2):**
-1. Login + sidebar + merchant list page (mock data)
+1. ⏳ Login + sidebar + merchant list page (mock data)
 
 ### Week 3 — Data Integration & Reports
 
 **Backend:**
-1. Dashboard endpoints: summary, trend, peak-hours, top products
-2. Analytics endpoint: overview dengan period comparison
-3. Report endpoints: daily-sales, monthly-sales, consumption
-4. Consumption_log auto-populate saat transaksi CONFIRMED
-5. Admin onboarding endpoint live
+1. ✅ Dashboard endpoints: summary, trend, peak-hours, top products
+2. ✅ Analytics endpoint: overview dengan period comparison
+3. ✅ Report endpoints: daily-sales, monthly-sales, consumption
+4. ✅ Consumption_log auto-populate saat transaksi CONFIRMED (di transaction service)
+5. ✅ Admin onboarding endpoint live (POST /admin/businesses)
+6. ✅ Admin CRUD product+recipe, manage plan/features/status, audit log
+7. ✅ Insight endpoint live (rule-based MVP)
 
 **Frontend Dashboard (Dev 1 + 2 cross):**
-1. Statistics page connect ke API
-2. History page connect ke API
-3. Reports page (3 tab + export trigger, export backend belum live)
+1. ⏳ Statistics page connect ke API
+2. ⏳ History page connect ke API
+3. ⏳ Reports page (3 tab + export trigger)
 
 **Frontend Operator (Dev 3):**
-1. Connect ke real API
-2. Riwayat hari ini
+1. ⏳ Connect ke real API
+2. ⏳ Riwayat hari ini
 
 **Frontend Admin (Dev 2):**
-1. Merchant onboarding form
-2. Merchant list page connect ke API
+1. ⏳ Merchant onboarding form
+2. ⏳ Merchant list page connect ke API
 
 ### Week 4 — AI Insight + Polish
 
 **Backend:**
-1. Insight endpoint live (rule-based MVP, minimal 4-6 insight types)
-2. Report export endpoint (PDF + CSV generator)
-3. Admin audit log integration di semua admin endpoint
+1. ✅ Insight endpoint live (rule-based, AI-ready schema)
+2. ⏳ Report export endpoint (PDF + CSV generator)
+3. ✅ Admin audit log integration di semua admin endpoint
 
 **Frontend Dashboard (Dev 1):**
-1. AI Analytics page: render insight cards, empty state, loading
-2. Reports export connect ke backend (download URL flow)
+1. ⏳ AI Analytics page: render insight cards, empty state, loading
+2. ⏳ Reports export connect ke backend (download URL flow)
 
 **Frontend Operator (Dev 3):**
-1. Polish: error state, loading skeleton, offline indicator
-2. PWA manifest + service worker basic (caching shell only)
+1. ⏳ Polish: error state, loading skeleton, offline indicator
+2. ⏳ PWA manifest + service worker basic (caching shell only)
 
 **Frontend Admin (Dev 2):**
-1. Merchant detail page: products CRUD + recipe form
-2. Cross-merchant transactions read-only view
+1. ⏳ Merchant detail page: products CRUD + recipe form
+2. ⏳ Cross-merchant transactions read-only view
 
 ### Week 5-6 — Integration Testing + Buffer
 
