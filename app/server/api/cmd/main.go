@@ -11,6 +11,7 @@ import (
 
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/config"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/auth"
+	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/dashboard"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/operator"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/product"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/transaction"
@@ -85,6 +86,8 @@ func main() {
 	transactionRepo := transaction.NewPostgresRepository(db)
 	transactionSvc := transaction.NewService(transactionRepo)
 	transaction.RegisterRoutes(e, transaction.NewHandler(transactionSvc), authMiddleware)
+
+	dashboard.RegisterRoutes(e, dashboard.NewHandler(dashboard.NewQueries(db)), authMiddleware)
 
 	applogger.Info("server starting on port %s", cfg.AppPort)
 	if err := e.Start(":" + cfg.AppPort); err != nil {
