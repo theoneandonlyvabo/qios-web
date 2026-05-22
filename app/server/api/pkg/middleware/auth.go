@@ -6,12 +6,13 @@
 // RequireOwner        — pastikan role == "owner"
 // RequireOperator     — pastikan role == "owner" atau "operator"
 // RequireOperatorOnly — pastikan role == "operator" (bukan owner)
+// RequireAdmin        — pastikan role == "admin"
 //
 // Claims yang diinject ke context:
 //   "user_id"      string
 //   "operator_id"  string  (kosong kalau role != "operator")
 //   "business_id"  string
-//   "role"         string  ("owner" | "operator")
+//   "role"         string  ("owner" | "operator" | "admin")
 
 package middleware
 
@@ -79,6 +80,18 @@ func RequireOperatorOnly(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		role, _ := c.Get("role").(string)
 		if role != "operator" {
+			return response.Forbidden(c)
+		}
+		return next(c)
+	}
+}
+
+// RequireAdmin memastikan user yang login adalah admin Skalar.
+// Wajib dipanggil setelah RequireAuth.
+func RequireAdmin(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		role, _ := c.Get("role").(string)
+		if role != "admin" {
 			return response.Forbidden(c)
 		}
 		return next(c)

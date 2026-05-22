@@ -25,6 +25,7 @@ type Service struct {
 const (
 	RoleOwner    = "owner"
 	RoleOperator = "operator"
+	RoleAdmin    = "admin"
 )
 
 type Claims struct {

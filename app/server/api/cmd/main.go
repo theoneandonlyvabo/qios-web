@@ -10,10 +10,14 @@ import (
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/config"
+	adminpkg "github.com/theoneandonlyvabo/qios-web/app/server/api/core/admin"
+	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/analytics"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/auth"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/dashboard"
+	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/insight"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/operator"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/product"
+	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/report"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/transaction"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/core/user"
 	"github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/database"
@@ -88,6 +92,13 @@ func main() {
 	transaction.RegisterRoutes(e, transaction.NewHandler(transactionSvc), authMiddleware)
 
 	dashboard.RegisterRoutes(e, dashboard.NewHandler(dashboard.NewQueries(db)), authMiddleware)
+	analytics.RegisterRoutes(e, db, authMiddleware)
+	report.RegisterRoutes(e, db, authMiddleware)
+	insight.RegisterRoutes(e, db, authMiddleware)
+
+	adminRepo := adminpkg.NewPostgresRepository(db)
+	adminSvc := adminpkg.NewService(adminRepo, jwtSvc)
+	adminpkg.RegisterRoutes(e, adminpkg.NewHandler(adminSvc), authMiddleware)
 
 	applogger.Info("server starting on port %s", cfg.AppPort)
 	if err := e.Start(":" + cfg.AppPort); err != nil {
