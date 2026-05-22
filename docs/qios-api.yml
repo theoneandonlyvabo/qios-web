@@ -7,7 +7,7 @@ openapi: 3.0.3
 #  - Xendit DROPPED. Full in-house transaction management.
 #  - Transaction status flow: PENDING -> CONFIRMED -> VOIDED
 #  - 3 payment methods MVP: CASH, QRIS_STATIC, TRANSFER
-#  - Manual confirmation by kasir via slide-to-confirm gesture (>=800ms)
+#  - Manual confirmation by operator via slide-to-confirm gesture (>=800ms)
 #  - Recipe nested in product (structured JSON, ingredients[])
 #  - Product CRUD moved to admin domain (owner read-only)
 #  - Admin domain added (Skalar staff onboarding + management surface)
@@ -21,11 +21,11 @@ openapi: 3.0.3
 info:
   title: QIOS API
   description: >
-    API contract antara client (Next.js dashboard + PWA kasir terpisah) dan
+    API contract antara client (Next.js dashboard + PWA operator terpisah) dan
     server (Go + Echo) untuk platform QIOS.
     QIOS adalah business intelligence layer untuk UMKM dengan in-house
     transaction management. Tiga role utama: owner (akses dashboard),
-    operator (akses PWA kasir), dan admin (staff Skalar, akses admin panel).
+    operator (akses PWA operator), dan admin (staff Skalar, akses admin panel).
   version: 0.4.0
   contact:
     name: QIOS Development Team
@@ -448,15 +448,15 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   # ==========================================================
-  # KASIR AUTH (OPERATOR LOGIN)
+  # OPERATOR AUTH (PWA LOGIN)
   # ==========================================================
-  # PWA kasir terpisah dari dashboard. Operator login via:
+  # PWA operator terpisah dari dashboard. Operator login via:
   #  - business_id + operator_code + password (fallback)
   #  - qr_token (primary, faster)
   # JWT scope: "operator" (cannot hit owner/admin endpoints)
   # ==========================================================
 
-  /kasir/auth/login:
+  /operator/auth/login:
     post:
       tags: [Operator]
       summary: Operator login dengan credential
@@ -501,7 +501,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
-  /kasir/auth/login/qr:
+  /operator/auth/login/qr:
     post:
       tags: [Operator]
       summary: Operator login dengan QR scan
@@ -538,10 +538,10 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
-  /kasir/me:
+  /operator/me:
     get:
       tags: [Operator]
-      summary: Profil operator yang sedang login (PWA kasir)
+      summary: Profil operator yang sedang login (PWA operator)
       security: [{ BearerAuth: [] }]
       responses:
         '200':
@@ -575,7 +575,7 @@ paths:
       summary: List produk business
       description: >
         Owner & operator bisa GET. Mendukung filter kategori, search,
-        dan sort. is_available filter optional buat kasir hide produk
+        dan sort. is_available filter optional buat operator hide produk
         yang lagi habis.
       security: [{ BearerAuth: [] }]
       parameters:
@@ -713,7 +713,7 @@ paths:
     get:
       tags: [Transaction]
       summary: Detail transaksi
-      description: Owner-only via dashboard. Operator akses transaksi sendiri lewat /kasir/transactions/{id}.
+      description: Owner-only via dashboard. Operator akses transaksi sendiri lewat /operator/transactions/{id}.
       security: [{ BearerAuth: [] }]
       parameters:
         - { name: transaction_id, in: path, required: true, schema: { type: string } }
@@ -737,7 +737,7 @@ paths:
       tags: [Transaction]
       summary: Konfirmasi transaksi (PENDING -> CONFIRMED)
       description: >
-        Trigger oleh slide-to-confirm gesture di kasir (FE handle 800ms
+        Trigger oleh slide-to-confirm gesture di app operator (FE handle 800ms
         threshold). Body wajib `payment_method`. Backend stamp
         confirmed_at + confirmed_by (operator_id dari JWT atau null kalo
         owner langsung).
@@ -1469,7 +1469,7 @@ paths:
       tags: [Admin]
       summary: Hapus operator atas permintaan merchant
       description: >
-        Admin hanya bisa REMOVE operator on request (misal kasir resign,
+        Admin hanya bisa REMOVE operator on request (misal operator resign,
         owner gak bisa akses dashboard sementara). Tidak bisa CREATE atau EDIT
         operator. Itu wewenang owner.
       security: [{ BearerAuth: [] }]
@@ -1656,7 +1656,7 @@ components:
 
     BusinessLite:
       type: object
-      description: Bentuk ringkas Business yang dikirim ke PWA kasir (operator gak butuh tau plan/features detail).
+      description: Bentuk ringkas Business yang dikirim ke PWA operator (operator gak butuh tau plan/features detail).
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1736,7 +1736,7 @@ components:
           type: array
           items: { $ref: '#/components/schemas/RecipeIngredient' }
           description: Komposisi structured. Empty array kalau produk gak punya recipe (misal jasa).
-        is_available: { type: boolean, description: Kasir hide produk yang lagi habis }
+        is_available: { type: boolean, description: Operator hide produk yang lagi habis }
         total_sold: { type: integer, description: Total unit CONFIRMED, untuk sort popular }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -1766,14 +1766,14 @@ components:
       enum: [CASH, QRIS_STATIC, TRANSFER]
       description: >
         CASH = tunai. QRIS_STATIC = pembayaran via QRIS merchant static
-        (kasir konfirmasi manual). TRANSFER = transfer rekening (kasir cek manual).
+        (operator konfirmasi manual). TRANSFER = transfer rekening (operator cek manual).
         Dynamic QRIS via gateway = roadmap post-MVP.
 
     Transaction:
       type: object
       properties:
         id: { type: string }
-        order_id: { type: string, description: Format QIOS-YYYYMMDD-xxxx, ditampilkan ke kasir/owner }
+        order_id: { type: string, description: Format QIOS-YYYYMMDD-xxxx, ditampilkan ke operator/owner }
         business_id: { type: string, format: uuid }
         total_amount: { type: integer, description: Sum dari items.subtotal, IDR integer }
         status: { $ref: '#/components/schemas/TransactionStatus' }
