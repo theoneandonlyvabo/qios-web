@@ -140,6 +140,7 @@ type businessResponse struct {
 	City         *string `json:"city"`
 	Country      *string `json:"country"`
 	XenditStatus string  `json:"xendit_status"`
+	QrisString   *string `json:"qris_string"`
 }
 
 func getBusiness(db *sql.DB) echo.HandlerFunc {
@@ -148,12 +149,12 @@ func getBusiness(db *sql.DB) echo.HandlerFunc {
 
 		var res businessResponse
 		err := db.QueryRow(
-			`SELECT id, qios_id, business_name, phone, address, city, country, xendit_status
+			`SELECT id, qios_id, business_name, phone, address, city, country, xendit_status, qris_string
 			 FROM businesses WHERE id = $1`,
 			businessID,
 		).Scan(
 			&res.ID, &res.QiosID, &res.BusinessName, &res.Phone,
-			&res.Address, &res.City, &res.Country, &res.XenditStatus,
+			&res.Address, &res.City, &res.Country, &res.XenditStatus, &res.QrisString,
 		)
 
 		if errors.Is(err, sql.ErrNoRows) {
@@ -176,11 +177,12 @@ func updateBusiness(db *sql.DB) echo.HandlerFunc {
 		businessID := businessIDFromCtx(c)
 
 		var req struct {
-			BusinessName string `json:"business_name" validate:"omitempty,min=1,max=255"`
-			Phone        string `json:"phone"         validate:"omitempty,min=1,max=32"`
-			Address      string `json:"address"       validate:"omitempty,min=1,max=1024"`
-			City         string `json:"city"          validate:"omitempty,min=1,max=100"`
-			Country      string `json:"country"       validate:"omitempty,min=2,max=100"`
+			BusinessName string  `json:"business_name" validate:"omitempty,min=1,max=255"`
+			Phone        string  `json:"phone"         validate:"omitempty,min=1,max=32"`
+			Address      string  `json:"address"       validate:"omitempty,min=1,max=1024"`
+			City         string  `json:"city"          validate:"omitempty,min=1,max=100"`
+			Country      string  `json:"country"       validate:"omitempty,min=2,max=100"`
+			QrisString   *string `json:"qris_string"   validate:"omitempty,min=1,max=4096"`
 		}
 		if err := c.Bind(&req); err != nil {
 			return response.BadRequest(c, "invalid request body")
@@ -196,9 +198,10 @@ func updateBusiness(db *sql.DB) echo.HandlerFunc {
 			     address       = COALESCE(NULLIF($3, ''), address),
 			     city          = COALESCE(NULLIF($4, ''), city),
 			     country       = COALESCE(NULLIF($5, ''), country),
+			     qris_string   = COALESCE($6, qris_string),
 			     updated_at    = NOW()
-			 WHERE id = $6`,
-			req.BusinessName, req.Phone, req.Address, req.City, req.Country, businessID,
+			 WHERE id = $7`,
+			req.BusinessName, req.Phone, req.Address, req.City, req.Country, req.QrisString, businessID,
 		)
 		if err != nil {
 			return response.Internal(c)

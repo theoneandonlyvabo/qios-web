@@ -1,9 +1,10 @@
 // core/transaction/model.go
 //
 // Tipe-tipe untuk domain transaction:
-//   - Order          → representasi baris di tabel pos_orders
-//   - OrderItem      → representasi baris di tabel pos_order_items
-//   - OrderWithItems → Order + item-itemnya untuk response detail
+//   - Order           → representasi baris di tabel pos_orders
+//   - OrderItem       → representasi baris di tabel pos_order_items
+//   - OrderWithItems  → Order + item-itemnya untuk response detail
+//   - ConfirmResponse → response confirm; menyertakan qris_string jika QRIS
 //
 // Catatan: payment_method di-set saat confirm, bukan saat create.
 // total_amount dihitung server-side dari items — client tidak kirim total.
@@ -94,6 +95,13 @@ type CreateOrderRequest struct {
 // ConfirmOrderRequest — body POST /transactions/:id/confirm.
 type ConfirmOrderRequest struct {
 	PaymentMethod PaymentMethod `json:"payment_method" validate:"required,oneof=CASH QRIS EWALLET VIRTUAL_ACCOUNT"`
+}
+
+// ConfirmResponse — response POST /transactions/:id/confirm.
+// QrisString diisi hanya ketika payment_method = QRIS; nil untuk metode lain.
+type ConfirmResponse struct {
+	Order
+	QrisString *string `json:"qris_string,omitempty"`
 }
 
 // ----------------------------------------------------------------

@@ -20,7 +20,7 @@ type Service interface {
 	Create(ctx context.Context, businessID uuid.UUID, operatorID *uuid.UUID, req CreateOrderRequest) (*OrderWithItems, error)
 	List(ctx context.Context, businessID uuid.UUID, f ListFilter) (*ListResult, error)
 	GetByID(ctx context.Context, businessID, orderID uuid.UUID) (*OrderWithItems, error)
-	Confirm(ctx context.Context, businessID, orderID uuid.UUID, req ConfirmOrderRequest) (*Order, error)
+	Confirm(ctx context.Context, businessID, orderID uuid.UUID, req ConfirmOrderRequest) (*ConfirmResponse, error)
 	Void(ctx context.Context, businessID, orderID uuid.UUID) error
 }
 
@@ -150,7 +150,7 @@ func (s *service) GetByID(ctx context.Context, businessID, orderID uuid.UUID) (*
 // Confirm
 // ----------------------------------------------------------------
 
-func (s *service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, req ConfirmOrderRequest) (*Order, error) {
+func (s *service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, req ConfirmOrderRequest) (*ConfirmResponse, error) {
 	now := time.Now()
 	paidAt := &sql.NullTime{Valid: true, Time: now}
 	method := req.PaymentMethod
@@ -159,12 +159,22 @@ func (s *service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, re
 		return nil, err
 	}
 
-	// Kembalikan order yang sudah terupdate.
 	result, err := s.repo.FindByID(ctx, orderID, businessID)
 	if err != nil {
 		return nil, err
 	}
-	return &result.Order, nil
+
+	res := &ConfirmResponse{Order: result.Order}
+
+	if method == PaymentQRIS {
+		qs, err := s.repo.GetBusinessQrisString(ctx, businessID)
+		if err != nil {
+			return nil, err
+		}
+		res.QrisString = qs
+	}
+
+	return res, nil
 }
 
 // ----------------------------------------------------------------

@@ -32,6 +32,9 @@ type Repository interface {
 
 	// UpdateStatus mengupdate status dan field terkait (paid_at, payment_method).
 	UpdateStatus(ctx context.Context, id, businessID uuid.UUID, status Status, method *PaymentMethod, paidAt *sql.NullTime) error
+
+	// GetBusinessQrisString mengambil qris_string dari tabel businesses.
+	GetBusinessQrisString(ctx context.Context, businessID uuid.UUID) (*string, error)
 }
 
 // productSnapshot adalah data produk yang di-snapshot ke order item.
@@ -277,6 +280,25 @@ func buildListWhere(businessID uuid.UUID, f ListFilter) (string, []any) {
 	}
 
 	return strings.Join(conds, " AND "), args
+}
+
+// ----------------------------------------------------------------
+// GetBusinessQrisString
+// ----------------------------------------------------------------
+
+func (r *PostgresRepository) GetBusinessQrisString(ctx context.Context, businessID uuid.UUID) (*string, error) {
+	var qs sql.NullString
+	err := r.db.QueryRowContext(ctx,
+		`SELECT qris_string FROM businesses WHERE id = $1`,
+		businessID,
+	).Scan(&qs)
+	if err != nil {
+		return nil, fmt.Errorf("transaction: get business qris_string: %w", err)
+	}
+	if qs.Valid {
+		return &qs.String, nil
+	}
+	return nil, nil
 }
 
 // ----------------------------------------------------------------
