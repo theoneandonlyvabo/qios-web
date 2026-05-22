@@ -1,22 +1,17 @@
 <div align="center">
 
-# QIOS — by Skalar Solutions
+# QIOS
 
-**Platform manajemen keuangan dan operasional untuk UMKM Indonesia.**
-Bukan POS — QIOS adalah BI layer di atas payment flow.
+**Sistem manajemen keuangan dan operasional berbasis web untuk UMKM Indonesia**
 
-<br />
+[![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black?style=flat-square&logo=nextdotjs)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org)
+[![Go](https://img.shields.io/badge/Go-1.25-00add8?style=flat-square&logo=go)](https://go.dev)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?style=flat-square&logo=docker)](https://docker.com)
+[![Bruno](https://img.shields.io/badge/Bruno-API_Collection-FF6C37?style=flat-square)](https://www.usebruno.com)
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
-[![Go](https://img.shields.io/badge/Go-1.26.2-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Xendit](https://img.shields.io/badge/Payment-Xendit-003399?style=for-the-badge)](https://xendit.co/)
-[![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)]()
-
-<br />
-
-[![PRD](https://img.shields.io/badge/📄%20Baca%20PRD%20Lengkap-Google%20Docs-4285F4?style=for-the-badge&logo=googledocs&logoColor=white)](https://docs.google.com/document/d/10RzXPqzt4TTMYUx1XPSTBdMS4jRiizxS0h3nTYEVRIM/edit?usp=sharing)
+> Project Bible lengkap ada di [`docs/CLAUDE.md`](docs/CLAUDE.md). Baca sebelum menyentuh kode.
 
 </div>
 
@@ -25,173 +20,113 @@ Bukan POS — QIOS adalah BI layer di atas payment flow.
 ## Daftar Isi
 
 - [Arsitektur](#arsitektur)
-- [Struktur Repository](#struktur-repository)
-- [Frontend Guide](#-frontend-guide)
-- [Backend Guide](#-backend-guide)
+- [Dashboard App](#%EF%B8%8F-dashboard-app-owner)
+- [Operator App PWA](#-operator-app-pwa-kasir)
+- [Admin App](#-admin-app-skalar-staff)
+- [Backend API](#%EF%B8%8F-backend-api)
+- [Common Issues](#common-issues)
 
 ---
 
 ## Arsitektur
 
-```
-Browser (Owner / Operator)
-         │
-         ▼
-  ┌─────────────────┐
-  │   apps/client   │  Next.js 16.2.6 — UI, route groups, API Routes
-  └────────┬────────┘
-           │  HTTP (internal)
-           ▼
-  ┌─────────────────┐
-  │   apps/server   │  Go + Echo — business logic, auth, webhook
-  └────────┬────────┘
-           │
-           ▼
-  ┌─────────────────┐
-  │   PostgreSQL    │  Docker — persistent storage, 14 migrations
-  └─────────────────┘
-```
-
-> Browser tidak pernah ngobrol langsung dengan Go. Semua request wajib lewat API Routes Next.js terlebih dahulu.
-
 ### Tech Stack
 
-| Layer | Teknologi | Alasan |
-|---|---|---|
-| Frontend | Next.js 16.2.6 + TypeScript | Handle UI dan mid-end dalam satu framework |
-| Backend | Go 1.26.2 + Echo v4 | Performa tinggi, concurrency native untuk webhook |
-| Database | PostgreSQL 16 | ACID compliance — data transaksi tidak boleh corrupt |
-| Payment | Xendit xenPlatform | Sub-account per merchant, split rule otomatis |
-| Auth | JWT (httpOnly cookie + localStorage) | Refresh token di HttpOnly cookie (server-side), access token di memory + localStorage (offline mode) |
+| Layer | Teknologi |
+|---|---|
+| Dashboard App (owner) | Next.js 16, TypeScript, Tailwind CSS v4, Recharts |
+| Operator App (kasir) | Next.js 16, TypeScript, Tailwind CSS v4, PWA |
+| Admin App (Skalar) | Next.js 16, TypeScript, Tailwind CSS v4 |
+| API Server | Go 1.25, Echo v4, lib/pq, golang-jwt |
+| Database | PostgreSQL 16 (Docker) |
+| API Spec | OpenAPI 3.0.3 (`docs/qios-api.yml`) |
+| API Testing | Bruno (committed ke repo) |
 
----
-
-## Struktur Repository
+### Struktur Repository
 
 ```
 qios-web/
-├── apps/
-│   ├── client/          → Next.js (frontend + mid-end)
-│   └── server/          → Go + Echo (backend)
+├── app/
+│   ├── client/
+│   │   ├── dashboard/      # Next.js — interface owner (desktop-first)
+│   │   ├── operator/       # Next.js — PWA kasir (mobile-first, Android)
+│   │   └── admin/          # Next.js — panel Skalar staff
+│   └── server/
+│       ├── api/            # Go + Echo — REST API
+│       └── bruno/          # Bruno API collection
 ├── docs/
-│   └── qios-api.yml    → OpenAPI 3.0.3 — kontrak antara FE dan BE
-├── docker-compose.yml
-└── .env.example
+│   ├── CLAUDE.md           # Project Bible (baca ini dulu)
+│   └── qios-api.yml        # OpenAPI contract v0.4
+└── infra/
+    ├── database/
+    │   └── migrations/     # SQL migration files (append-only)
+    └── docker-compose.yml
 ```
+
+Tiga client app independen yang share satu backend API. Di-deploy ke subdomain berbeda. Tidak ada shared component library antar app di MVP.
 
 ---
 
-<br />
+## 🖥️ Dashboard App (Owner)
 
-<div align="center">
-
-# 🖥 Frontend Guide
-
-*Bagian ini untuk developer yang handle `apps/client`.*
-*Developer backend? Loncat ke [Backend Guide](#-backend-guide).*
-
-[![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-v24.15.0-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind](https://img.shields.io/badge/Tailwind-v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-
-</div>
+**Path:** `app/client/dashboard/`  
+**Port dev:** `http://localhost:3000`
 
 ### Tanggung Jawabmu
 
 | ✅ Kamu handle | ❌ Jangan disentuh |
 |---|---|
-| Semua UI — halaman, komponen, layout | `apps/server/` |
-| API Routes sebagai jembatan ke backend Go | `migrations/` |
-| Auth guard dan redirect | Konfigurasi database |
-| Token management (memory + localStorage untuk offline mode) | File `.env` server |
-
----
+| Semua UI — halaman, komponen, layout | `app/server/` |
+| API Routes sebagai jembatan ke backend Go | `infra/database/migrations/` |
+| Auth guard dan redirect middleware | Konfigurasi database |
+| Token management (memory + localStorage) | File `.env` server |
 
 ### Prerequisites
 
-**1. Git** — https://git-scm.com/downloads
-
-```bash
-git -v
-```
-
-**2. Node.js v24.15.0** — https://nodejs.org/en
-
-```bash
-node -v   # harus v24.15.0
-npm -v    # harus v10.x ke atas
-```
-
-**3. VS Code** (rekomendasi) — https://code.visualstudio.com/
-Install extension: `ESLint`, `Prettier`, `Tailwind CSS IntelliSense`
-
----
-
-### Akses Repository
-
-1. Buat akun GitHub di https://github.com jika belum punya
-2. Kirim username GitHub ke project lead
-3. Terima email undangan → klik **Accept invitation**
-4. Repo: https://github.com/theoneandonlyvabo/qios-web
-
----
+- Node.js v24+
+- npm
+- Backend API running di `http://localhost:8080`
 
 ### Quickstart
 
 ```bash
-# Clone
-git clone https://github.com/theoneandonlyvabo/qios-web.git
-cd qios-web/apps/client
-
-# Install dependencies
+cd app/client/dashboard
 npm install
-
-# Setup environment
 cp .env.example .env.local
-# → Minta nilai .env.local ke project lead. Jangan commit file ini.
-
-# Jalankan
+# Minta nilai .env.local ke project lead
 npm run dev
 ```
 
-Buka `http://localhost:3000`. Tampilan muncul = setup berhasil.
-
----
+Buka `http://localhost:3000`. Login page muncul = setup berhasil.
 
 ### Struktur Folder
 
 ```
-apps/client/
+app/client/dashboard/
 ├── app/
-│   ├── (dashboard)/        # owner — desktop-first
-│   │   ├── dashboard/      # snapshot bisnis hari ini
-│   │   ├── statistics/     # produk terlaris, tren transaksi
-│   │   ├── analytics/      # AI analytics — insight rule-based
-│   │   ├── history/        # list semua transaksi
-│   │   ├── operators/      # CRUD akun kasir
-│   │   └── login/          # pintu masuk
-│   └── (kasir)/            # operator — mobile-first PWA
-│       └── kasir/          # input order, QR Xendit, status bayar
+│   ├── (auth)/
+│   │   └── login/          # email/password + Google OAuth
+│   ├── dashboard/          # snapshot bisnis hari ini
+│   ├── statistics/         # tren transaksi + produk terlaris
+│   ├── analytics/          # AI insight cards (rule-based MVP)
+│   ├── reports/            # laporan harian/bulanan/consumption + export
+│   ├── history/            # list semua transaksi dengan filter
+│   ├── operators/          # CRUD akun kasir
+│   └── products/           # katalog produk (read-only)
 ├── components/             # komponen UI reusable
+├── hooks/                  # useAuth, dll
 ├── lib/
-│   ├── api.ts              # fetch wrapper ke Go
-│   └── auth.ts             # manajemen token
-└── middleware.ts            # auth guard
+│   ├── api.ts              # HTTP client terpusat
+│   └── auth.ts             # token management
+└── middleware.ts            # auth guard semua route
 ```
-
----
 
 ### Environment Variables
 
-```bash
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-API_BASE_URL=http://localhost:8080
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id
 ```
-
-> `NEXT_PUBLIC_*` — terbaca di browser. Jangan taruh data sensitif.
-
----
 
 ### Git Workflow
 
@@ -202,330 +137,360 @@ main ──────── production-ready, jangan push langsung
 ```
 
 ```bash
-# Mulai fitur baru
 git checkout dev && git pull origin dev
-git checkout -b feature/nama-fitur
+git checkout -b feature/dashboard-statistics-chart
 
-# Setelah selesai
-git add .
-git commit -m "feat: deskripsi singkat"
-git push origin feature/nama-fitur
+# setelah selesai
+git push origin feature/dashboard-statistics-chart
+# buat PR ke dev
 ```
-
-Buka Pull Request ke `dev`. Jangan self-merge.
-
----
 
 ### Aturan Kode
 
-- Komponen di `components/` — tampilan saja, tanpa logika bisnis
-- Jangan panggil Go langsung dari browser — selalu lewat `app/api/`
-- Token management dihandle di `lib/auth.ts` — access token disimpan di memory + localStorage (offline mode support). Jangan simpan data sensitif lain di localStorage
-- Security headers dikonfigurasi di `next.config.ts` — berlaku otomatis untuk semua response
+- Tidak ada `any` — gunakan type yang proper atau `unknown`
+- Semua API call melalui `lib/api.ts`, bukan `fetch` langsung di komponen
+- State management sesederhana mungkin — jangan tambah library global sebelum dibutuhkan
 - Chart library: **Recharts** — jangan ganti tanpa diskusi tim
-- Jangan buat folder baru tanpa diskusi project lead
-- **Hapus sebelum production:** `app/(dashboard)/admin/page.tsx` — halaman test-only tanpa auth guard (akses via `/admin`)
+- Komponen naming: PascalCase. File hooks: camelCase dengan prefix `use`
 
 ---
 
-<details>
-<summary><strong>Common Issues (klik untuk expand)</strong></summary>
+## 📱 Operator App PWA (Kasir)
 
-<br />
-
-| Gejala | Solusi |
-|---|---|
-| `npm install` gagal | Cek versi Node: `node -v` harus `v24.15.0` |
-| Environment variable tidak terbaca | Nama file harus persis `.env.local` di `apps/client/` |
-| Error 401 Unauthorized | Token expired — logout dan login ulang |
-| Tidak bisa connect ke backend | Pastikan Go server jalan di `localhost:8080` |
-| Perubahan tidak muncul | Hard refresh: `Ctrl+Shift+R` / `Cmd+Shift+R` |
-
-</details>
-
----
-
-<br />
-
-<div align="center">
-
-# ⚙️ Backend Guide
-
-*Bagian ini untuk developer yang handle `apps/server`.*
-*Developer frontend? Kembali ke [Frontend Guide](#-frontend-guide).*
-
-[![Go](https://img.shields.io/badge/Go-1.26.2-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
-[![Echo](https://img.shields.io/badge/Echo-v4-00ADD8?style=flat-square)](https://echo.labstack.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Xendit](https://img.shields.io/badge/Xendit-xenPlatform-003399?style=flat-square)](https://xendit.co/)
-
-</div>
+**Path:** `app/client/operator/`  
+**Port dev:** `http://localhost:3001`
 
 ### Tanggung Jawabmu
 
 | ✅ Kamu handle | ❌ Jangan disentuh |
 |---|---|
-| Semua logika bisnis per domain | `apps/client/` |
-| Auth — issue dan verifikasi JWT | File UI apapun |
-| Xendit xenPlatform — sub-account, QRIS, webhook | Styling atau komponen |
-| Akses database — query dan mutasi PostgreSQL | |
-
----
+| UI mobile-first untuk alur kasir | `app/server/` |
+| QR scan login (kamera device) | `infra/database/migrations/` |
+| Slide-to-confirm gesture (≥800ms hold) | Konfigurasi database |
+| Offline indicator + error states | File `.env` server |
 
 ### Prerequisites
 
-**1. Git** — https://git-scm.com/downloads
-
-```bash
-git -v
-```
-
-**2. Go 1.26.2** — https://go.dev/dl/
-
-```bash
-go version   # harus go1.26.2
-```
-
-**3. Docker** — https://www.docker.com/products/docker-desktop/
-
-```bash
-docker --version
-```
-
-**4. VS Code** (rekomendasi) + extension **Go** (by Google)
-
----
-
-### Akses Repository
-
-1. Buat akun GitHub di https://github.com jika belum punya
-2. Kirim username GitHub ke project lead
-3. Terima email undangan → klik **Accept invitation**
-4. Repo: https://github.com/theoneandonlyvabo/qios-web
-
----
+- Node.js v24+
+- npm
+- Backend API running di `http://localhost:8080`
+- Chrome/Android untuk test kamera QR
 
 ### Quickstart
 
 ```bash
-# Clone
-git clone https://github.com/theoneandonlyvabo/qios-web.git
-cd qios-web
-
-# Jalankan PostgreSQL
-docker compose up postgres -d
-
-# Setup server
-cd apps/server
-go mod tidy
-cp .env.example .env
-# → Minta nilai .env ke project lead. Jangan commit file ini.
-
-# Jalankan (migration otomatis saat startup)
-go run ./cmd/...
+cd app/client/operator
+npm install
+cp .env.example .env.local
+npm run dev
 ```
 
-Server jalan di `http://localhost:8080`.
-
----
+Buka `http://localhost:3001`. Login QR atau credential muncul = setup berhasil.
 
 ### Struktur Folder
 
 ```
-apps/server/
-├── cmd/main.go             # entry point
-├── config/config.go        # load semua env vars ke struct Config
-├── domain/                 # logika bisnis per area
-│   ├── admin/              # admin panel, audit log
-│   ├── analytic/           # rule-based insight engine
-│   ├── auth/               # login, refresh, logout
-│   ├── dashboard/          # summary, tren, peak hours
-│   ├── operator/           # CRUD akun kasir
-│   ├── payment/            # Xendit, webhook handler
-│   ├── product/            # katalog produk, soft delete
-│   ├── statistic/          # produk terlaris, breakdown
-│   ├── transaction/        # pos orders, order items
-│   └── user/               # profil user dan bisnis
-├── platform/
-│   ├── database/           # koneksi PostgreSQL + migrasi
-│   ├── jwt/                # issue dan verify token
-│   ├── middleware/         # auth guard, role check
-│   └── response/           # helper JSON response standar
-└── migrations/             # file .sql bernomor urut (001–014)
+app/client/operator/
+├── app/
+│   ├── login/              # QR scan (primary) atau operator_code + password
+│   ├── order/              # pilih produk, set qty, cart
+│   ├── confirm/            # pilih payment method + slide-to-confirm
+│   └── history/            # riwayat transaksi hari ini
+├── components/
+├── hooks/
+│   ├── useCamera.ts        # kamera untuk QR scan
+│   └── useSlideConfirm.ts  # threshold ≥800ms gesture
+└── lib/
+    ├── api.ts
+    └── qr.ts               # QR decode helper
 ```
 
-**Status implementasi:**
+### Auth Flow Operator
 
-| Domain | Status |
+- **Login QR:** Operator scan QR yang owner generate dari dashboard → `POST /operator/auth/login/qr`
+- **Login credential:** Input `operator_code` + password → `POST /operator/auth/login`
+- JWT claim: `operator_id`, `business_id`, `scope: operator`
+- Token di memory + localStorage (offline mode — intentional, bukan bug)
+
+### Payment Methods
+
+| Method | Flow |
 |---|---|
-| auth | ✅ Done |
-| user | ✅ Done |
-| product | ✅ Done |
-| operator | ✅ Done |
-| transaction | 🔄 In progress |
-| payment / xendit | 🔄 In progress |
-| dashboard | ⏳ Pending |
-| statistic | ⏳ Pending |
-| analytic | ⏳ Pending |
-| admin | ⏳ Pending |
+| `CASH` | Kasir pilih Cash, slide-to-confirm |
+| `QRIS_STATIC` | App tampilkan `business.qris_static_payload` sebagai QR untuk pembeli scan, kasir konfirmasi manual |
+| `TRANSFER` | Tampilkan info rekening, kasir konfirmasi manual |
 
-**Aturan layer dalam setiap domain:**
-
-```
-handler.go    → terima request, validasi input, return response
-    ↓
-service.go    → semua keputusan bisnis di sini
-    ↓
-repository.go → query database saja, tanpa logika
-```
-
-Handler tidak boleh sentuh DB. Service tidak boleh tau soal HTTP.
-
----
+Tidak ada webhook atau payment gateway. Semua konfirmasi oleh kasir.
 
 ### Environment Variables
 
-| Variable | Nilai Default | Keterangan |
-|---|---|---|
-| `APP_PORT` | `8080` | Port server |
-| `DB_HOST` | `localhost` | Host PostgreSQL |
-| `DB_PORT` | `5432` | Port PostgreSQL |
-| `DB_USER` | `postgres` | Username DB |
-| `DB_PASSWORD` | — | Password DB |
-| `DB_NAME` | `qios` | Nama database |
-| `JWT_SECRET` | — | **Wajib diisi** — tidak boleh kosong |
-| `JWT_ACCESS_EXPIRY` | `15m` | Durasi access token |
-| `JWT_REFRESH_EXPIRY` | `720h` | Durasi refresh token |
-| `XENDIT_SECRET_KEY` | — | Secret key Xendit |
-| `XENDIT_ENV` | `sandbox` | `sandbox` atau `production` |
-| `XENDIT_BASE_URL` | `https://api.xendit.io` | Override base URL Xendit API |
-| `XENDIT_WEBHOOK_TOKEN` | — | Verifikasi header `x-callback-token` dari webhook |
-| `XENDIT_PLATFORM_ACCOUNT_ID` | — | Master account ID QIOS |
-| `XENDIT_CALLBACK_URL` | — | Public URL `POST /webhooks/xendit` (ngrok untuk dev) — kosong = pakai global webhook di Xendit dashboard |
-| `ENCRYPTION_KEY` | — | 64 hex chars (32 bytes) untuk enkripsi data sensitif |
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8080
+```
+
+### Aturan Kode
+
+- **Mobile-first.** Semua layout dirancang untuk 360–430px dulu, baru tablet
+- **Slide-to-confirm threshold ≥800ms** — jangan kurangi tanpa diskusi
+- Tidak ada `any`
+- Semua API call via `lib/api.ts`
 
 ---
+
+## 🛡 Admin App (Skalar Staff)
+
+**Path:** `app/client/admin/`  
+**Port dev:** `http://localhost:3002`
+
+### Tanggung Jawabmu
+
+| ✅ Kamu handle | ❌ Jangan disentuh |
+|---|---|
+| UI onboarding merchant baru | `app/server/` |
+| CRUD produk + recipe per merchant | `infra/database/migrations/` |
+| Manage plan, features, status merchant | Konfigurasi database |
+| Cross-merchant transaction view | File `.env` server |
+
+### Prerequisites
+
+- Node.js v24+
+- npm
+- Backend API running di `http://localhost:8080`
+
+### Quickstart
+
+```bash
+cd app/client/admin
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Buka `http://localhost:3002`. Login admin muncul = setup berhasil.
+
+### Struktur Folder
+
+```
+app/client/admin/
+├── app/
+│   ├── login/              # admin email/password, scope admin
+│   ├── merchants/
+│   │   ├── page.tsx        # list semua business dengan filter status/plan
+│   │   ├── new/            # form onboard merchant baru
+│   │   └── [id]/           # merchant detail (profile, products, operators, transactions, settings)
+│   └── transactions/       # cross-merchant transactions read-only
+├── components/
+└── lib/
+    └── api.ts
+```
+
+### Catatan Penting
+
+Admin **tidak bisa** create/edit operator merchant — hanya bisa remove atas permintaan owner. Operator dikelola owner via dashboard.
+
+Onboarding merchant = satu form yang create `users` + `businesses` dalam satu atomic DB transaction. Tidak ada external API call saat onboarding.
+
+### Environment Variables
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8080
+```
+
+---
+
+## ⚙️ Backend API
+
+**Path:** `app/server/api/`  
+**Port dev:** `http://localhost:8080`
+
+### Tanggung Jawabmu
+
+| ✅ Kamu handle | ❌ Jangan disentuh |
+|---|---|
+| Domain handler, service, repository | `app/client/` |
+| SQL migration files (append-only) | File `.env` client |
+| JWT issue dan verify per scope | Konfigurasi server client |
+| Bruno collection update saat ada endpoint baru | — |
+
+### Prerequisites
+
+- Go 1.25+
+- Docker + Docker Compose
+
+### Quickstart
+
+**1. Clone dan setup env:**
+
+```bash
+git clone https://github.com/theoneandonlyvabo/qios-web.git
+cd qios-web
+
+cp app/server/api/.env.example app/server/api/.env
+# Edit .env: set DB_PASSWORD, JWT_SECRET, JWT_ADMIN_SECRET, ENCRYPTION_KEY
+```
+
+**2. Jalankan PostgreSQL:**
+
+```bash
+docker compose -f infra/docker-compose.yml up postgres -d
+```
+
+**3. Jalankan API server:**
+
+```bash
+cd app/server/api
+go run ./cmd/...
+# Migration otomatis jalan saat startup
+# Output: "Server running on :8080"
+```
+
+**4. Seed data awal (opsional):**
+
+```bash
+go run ./cmd/seed
+# Output: admin email + temporary password
+```
+
+**5. Buka Bruno collection:**
+
+```
+Buka Bruno desktop → open collection di app/server/bruno/
+Set environment "local" → mulai testing endpoint
+```
+
+### Struktur Folder
+
+```
+app/server/api/
+├── cmd/                    # entry point — main.go
+├── config/                 # config.go — load semua env vars ke struct Config
+├── core/                   # domain-driven business + view logic
+│   ├── auth/               # owner login, Google OAuth, refresh, logout
+│   ├── user/               # profil owner + business info (GET/PATCH /business)
+│   ├── operator/           # CRUD operator (owner-side) + login PWA operator
+│   ├── product/            # read-only owner, full CRUD via admin domain
+│   ├── transaction/        # PENDING → CONFIRMED → VOIDED + consumption_log
+│   ├── dashboard/          # view: summary, trend, peak hours, top products
+│   ├── analytics/          # view: overview dengan period comparison
+│   ├── report/             # view: daily/monthly sales, consumption, export
+│   ├── insight/            # view: rule-based insight cards
+│   └── admin/              # onboard merchant, CRUD product+recipe, audit, void
+└── pkg/                    # shared utilities
+    ├── database/           # connect PostgreSQL, jalankan migrasi
+    ├── jwt/                # issue dan verify JWT (owner/operator/admin)
+    ├── middleware/         # auth middleware per scope + RequireAdmin guard
+    ├── response/           # helper response JSON standar
+    ├── qmid/               # generator format QM-NNNNNN
+    └── encryption/         # AES-256 placeholder
+```
+
+### Environment Variables
+
+| Variable | Keterangan | Default |
+|---|---|---|
+| `APP_PORT` | Port server | `8080` |
+| `DB_HOST` | Host PostgreSQL | `localhost` |
+| `DB_PORT` | Port PostgreSQL | `5432` |
+| `DB_USER` | Username DB | `postgres` |
+| `DB_PASSWORD` | Password DB (**wajib**) | — |
+| `DB_NAME` | Nama database | `qios` |
+| `JWT_SECRET` | Secret JWT scope owner & operator (**wajib**) | — |
+| `JWT_ADMIN_SECRET` | Secret terpisah JWT scope admin (**wajib**) | — |
+| `JWT_ACCESS_EXPIRY` | Durasi access token | `15m` |
+| `JWT_REFRESH_EXPIRY` | Durasi refresh token | `720h` |
+| `ENCRYPTION_KEY` | AES-256 key 64 hex chars (**wajib**) | — |
+| `REPORT_EXPORT_DIR` | Path sementara PDF/CSV export | `/tmp/qios-reports` |
+| `REPORT_EXPORT_TTL` | Durasi download URL valid | `1h` |
+| `DASHBOARD_ORIGIN` | Allowed CORS origin dashboard | `http://localhost:3000` |
+| `OPERATOR_ORIGIN` | Allowed CORS origin operator | `http://localhost:3001` |
+| `ADMIN_ORIGIN` | Allowed CORS origin admin | `http://localhost:3002` |
+
+Startup **gagal** kalau `DB_PASSWORD`, `JWT_SECRET`, `JWT_ADMIN_SECRET`, atau `ENCRYPTION_KEY` kosong.
 
 ### Format API Response
 
-Semua endpoint wajib pakai format ini — jangan buat format sendiri:
-
 ```json
-{
-  "success": true,
-  "data": {},
-  "error": null,
-  "meta": {}
-}
+{ "success": true, "data": { ... }, "error": null }
+{ "success": false, "data": null, "error": "pesan error" }
 ```
 
-Gunakan helper dari `platform/response/`.
-
----
-
-### Auth Flow
+### Auth Flow (API Level)
 
 ```
-POST /auth/login
-  → verifikasi email + password
-  → issue access token (15m) + refresh token (720h)
-
-Next.js:  refresh token → httpOnly cookie (di-set server-side)
-Browser:  access token → memory + localStorage (offline mode)
-
-Setiap request:
-  → Authorization: Bearer <access_token>
-  → middleware verifikasi sebelum handler dipanggil
+Owner:   POST /auth/login              → access token (15m) + refresh token cookie (720h)
+Operator: POST /operator/auth/login/qr (QR scan) atau /operator/auth/login (credential)
+Admin:    POST /admin/auth/login        → JWT_ADMIN_SECRET terpisah, scope: admin
 ```
 
----
+JWT scope `owner`, `operator`, `admin` dipisah — cross-scope access = 403.
 
-### Payment Flow — Xendit + xenPlatform
-
-QIOS pakai **xenPlatform**: satu master account QIOS menaungi banyak sub-account merchant. Payment masuk ke sub-account masing-masing, fee QIOS diambil otomatis via split rule.
+### Domain Pattern
 
 ```
-Operator pilih produk di kasir
-  ↓
-Server buat order_id unik (QIOS-YYYYMMDD-xxxx) → simpan ke pos_orders
-  ↓
-QR static Xendit merchant ditampilkan ke pembeli
-  ↓
-Pembeli scan dan bayar — order_id jadi payment reference
-  ↓
-Xendit → POST /payment/xendit/webhook
-  ↓
-Server cocokkan order_id → update status transaksi
+handler.go → service.go → repository.go
 ```
 
-> Setiap request ke Xendit wajib include header `for-user-id: {xendit_account_id}`.
->
-> **Webhook wajib verifikasi signature Xendit sebelum proses apapun. Jangan skip.**
+- **Handler:** terima request, validasi, panggil service, kembalikan response. Tidak menyentuh DB.
+- **Service:** business logic. Tidak ada raw SQL.
+- **Repository:** semua SQL. Tidak ada business logic.
 
----
+Domain view (`dashboard`, `analytics`, `report`, `insight`) inject repository dari domain bisnis — tidak punya tabel sendiri. Dependency direction: **view → bisnis**. Arah sebaliknya = code review reject.
 
 ### Git Workflow
 
-```
-main ──────── production-ready, jangan push langsung
-  └── dev ─── integrasi semua fitur
-        └── feature/<nama> ── branch kerjamu
-```
-
 ```bash
-# Mulai fitur baru
 git checkout dev && git pull origin dev
-git checkout -b feature/nama-fitur
+git checkout -b feature/nama-endpoint
 
-# Setelah selesai
-git add .
-git commit -m "feat: deskripsi singkat"
-git push origin feature/nama-fitur
+git commit -m "feat: add POST /transactions/{id}/void"
+git push origin feature/nama-endpoint
+# buat PR ke dev
 ```
 
 **Format commit:**
 
 ```
-feat: tambah endpoint POST /transactions
-fix: perbaiki type assertion panic di product handler
-refactor: pisah service dan repository di domain payment
+feat: add transaction confirm endpoint with payment_method
+fix: prevent operator void on others' transactions
+refactor: split dashboard service from analytics service
 chore: update go dependencies
-docs: update qios-api.yml dengan domain transaction
+docs: update qios-api.yml with admin endpoints
 ```
-
----
 
 ### Aturan Kode
 
 - Tidak ada `os.Getenv()` di luar `config/config.go`
-- Semua domain wajib pakai interface (bukan concrete struct) agar bisa di-mock
-- Semua method service dan repository harus terima `context.Context`
-- Antar domain tidak boleh saling import langsung
-- Semua response via helper `platform/response/`
-- Migration bersifat append-only — jangan edit file yang sudah ada
-- Jangan buat folder baru tanpa diskusi project lead
+- Tidak ada logic bisnis di handler
+- Error selalu di-wrap: `fmt.Errorf("auth: failed to find user: %w", err)`
+- Semua response via `pkg/response/`
+- Tidak ada raw SQL di luar layer repository
+- Migration **append-only** — jangan edit file di `infra/database/migrations/`
+- Update `docs/qios-api.yml` **sebelum** implementasi endpoint baru
 
 ---
 
+## Common Issues
+
 <details>
-<summary><strong>Common Issues (klik untuk expand)</strong></summary>
+<summary><strong>Klik untuk expand</strong></summary>
 
 <br />
 
 | Gejala | Solusi |
 |---|---|
-| `go mod tidy` error | Cek versi Go: `go version` harus `go1.26.2` |
-| Env var tidak terbaca | Nama file harus persis `.env` di `apps/server/` |
-| Tidak bisa connect ke PostgreSQL | Cek Docker: `docker compose ps` — pastikan container aktif |
-| Port 8080 dipakai proses lain | Matikan proses atau ganti `APP_PORT` di `.env` |
-| Migration gagal | Jalankan server dari direktori `apps/server/`, bukan root repo |
+| `go mod tidy` error | Cek versi Go: `go version` harus `1.25+` |
+| Env var tidak terbaca | Nama file harus persis `.env` di `app/server/api/` |
+| Tidak bisa connect ke PostgreSQL | Cek Docker: `docker compose -f infra/docker-compose.yml ps` |
+| Port 8080 dipakai proses lain | Ganti `APP_PORT` di `.env` |
+| Migration gagal saat startup | Jalankan dari direktori `app/server/api/`, bukan root repo |
+| `401 Unauthorized` terus | Cek apakah token sudah expired — hit `/auth/refresh` |
+| `403 Forbidden` di endpoint admin | Butuh token scope `admin` dari `POST /admin/auth/login` |
+| QR scan tidak jalan di dev | Browser butuh permission kamera — pastikan `localhost` atau HTTPS |
+| QRIS QR tidak muncul di confirm | Cek `business.qris_static_payload` sudah di-set via PATCH /business |
 
 </details>
 
 ---
 
-<div align="center">
-
-*Pertanyaan tentang codebase? Hubungi project lead sebelum membuat asumsi sendiri.*
-
-</div>
+> Untuk implementasi detail: [`docs/CLAUDE.md`](docs/CLAUDE.md)  
+> Update API contract sebelum buat endpoint baru: [`docs/qios-api.yml`](docs/qios-api.yml)

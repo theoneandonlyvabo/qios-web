@@ -1,26 +1,30 @@
 .PHONY: dev server client db down down-v compose
 
 dev:
-	npx concurrently --names "server,client" --prefix-colors "cyan,magenta" \
-		"cd apps/server && go run ./cmd/..." \
-		"cd apps/client && npm run dev"
+	npx concurrently --names "server,client" --prefix-colors "cyan,red" \
+		"make server" \
+		"make client"
 
 server:
-	cd apps/server && go run ./cmd/...
+	npx concurrently --names "ai,api" --prefix-colors "cyan,cyan" \
+		"cd app/server/ai && go run ./cmd/..." \
+		"cd app/server/api && go run ./cmd/..."
 
 client:
-	cd apps/client && npm run dev
+	npx concurrently --names "dashboard,operator" --prefix-colors "red,red" \
+		"cd app/dashboard && npm run dev" \
+		"cd app/operator && npm run dev"
 
 # Jalankan PostgreSQL saja (untuk local dev sebelum `make server`).
 db:
 	docker compose up postgres -d
 
 # Hentikan semua Docker service.
-down:
+stop:
 	docker compose down
 
 # Hentikan dan hapus volumes (reset DB).
-down-v:
+reset:
 	docker compose down -v
 
 # Jalankan semua via Docker Compose (production-like).
