@@ -177,8 +177,8 @@ func (s *service) UpdateBusiness(ctx context.Context, id uuid.UUID, req UpdateBu
 	if req.Country != nil {
 		b.Country = req.Country
 	}
-	if req.XenditStatus != nil {
-		b.XenditStatus = *req.XenditStatus
+	if req.MerchantStatus != nil {
+		b.MerchantStatus = *req.MerchantStatus
 	}
 
 	if err := s.repo.UpdateBusiness(ctx, b); err != nil {

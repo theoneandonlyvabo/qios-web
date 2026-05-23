@@ -152,10 +152,10 @@ func (s *service) GetByID(ctx context.Context, businessID, orderID uuid.UUID) (*
 
 func (s *service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, req ConfirmOrderRequest) (*ConfirmResponse, error) {
 	now := time.Now()
-	paidAt := &sql.NullTime{Valid: true, Time: now}
+	confirmedAt := &sql.NullTime{Valid: true, Time: now}
 	method := req.PaymentMethod
 
-	if err := s.repo.UpdateStatus(ctx, orderID, businessID, StatusPaid, &method, paidAt); err != nil {
+	if err := s.repo.UpdateStatus(ctx, orderID, businessID, StatusConfirmed, &method, confirmedAt); err != nil {
 		return nil, err
 	}
 
@@ -163,6 +163,9 @@ func (s *service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, re
 	if err != nil {
 		return nil, err
 	}
+
+	// Populate consumption_log dari recipe produk.
+	go s.populateConsumptionLog(context.Background(), result, businessID, now)
 
 	res := &ConfirmResponse{Order: result.Order}
 
@@ -177,12 +180,50 @@ func (s *service) Confirm(ctx context.Context, businessID, orderID uuid.UUID, re
 	return res, nil
 }
 
+func (s *service) populateConsumptionLog(ctx context.Context, order *OrderWithItems, businessID uuid.UUID, confirmedAt time.Time) {
+	if len(order.Items) == 0 {
+		return
+	}
+	ids := make([]uuid.UUID, 0, len(order.Items))
+	for _, item := range order.Items {
+		if item.ProductID != nil {
+			ids = append(ids, *item.ProductID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	recipes, err := s.repo.FindProductRecipes(ctx, ids)
+	if err != nil || len(recipes) == 0 {
+		return
+	}
+	var entries []ConsumptionEntry
+	for _, item := range order.Items {
+		if item.ProductID == nil {
+			continue
+		}
+		for _, ri := range recipes[*item.ProductID] {
+			entries = append(entries, ConsumptionEntry{
+				TransactionID: order.ID,
+				BusinessID:    businessID,
+				ProductID:     item.ProductID,
+				ProductName:   item.ProductName,
+				Ingredient:    ri.Ingredient,
+				QuantityUsed:  ri.Quantity * float64(item.Quantity),
+				Unit:          ri.Unit,
+				ConfirmedAt:   confirmedAt,
+			})
+		}
+	}
+	_ = s.repo.InsertConsumptionLog(ctx, entries)
+}
+
 // ----------------------------------------------------------------
 // Void
 // ----------------------------------------------------------------
 
 func (s *service) Void(ctx context.Context, businessID, orderID uuid.UUID) error {
-	return s.repo.UpdateStatus(ctx, orderID, businessID, StatusCancelled, nil, nil)
+	return s.repo.UpdateStatus(ctx, orderID, businessID, StatusVoided, nil, nil)
 }
 
 // ----------------------------------------------------------------

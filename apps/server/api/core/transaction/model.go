@@ -28,11 +28,9 @@ var (
 type Status string
 
 const (
-	StatusPending   Status = "pending"
-	StatusPaid      Status = "paid"
-	StatusFailed    Status = "failed"
-	StatusExpired   Status = "expired"
-	StatusCancelled Status = "cancelled"
+	StatusPending   Status = "PENDING"
+	StatusConfirmed Status = "CONFIRMED"
+	StatusVoided    Status = "VOIDED"
 )
 
 type PaymentMethod string
@@ -54,7 +52,7 @@ type Order struct {
 	PaymentMethod *PaymentMethod `json:"payment_method"`
 	Status        Status         `json:"status"`
 	Note          *string        `json:"note"`
-	PaidAt        *time.Time     `json:"paid_at"`
+	ConfirmedAt   *time.Time     `json:"confirmed_at"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
 }
@@ -123,4 +121,23 @@ type ListResult struct {
 	Total        int      `json:"total"`
 	Page         int      `json:"page"`
 	Limit        int      `json:"limit"`
+}
+
+// RecipeItem — satu baris dalam JSONB recipe produk.
+type RecipeItem struct {
+	Ingredient string  `json:"ingredient"`
+	Quantity   float64 `json:"quantity"`
+	Unit       string  `json:"unit"`
+}
+
+// ConsumptionEntry — satu baris untuk tabel consumption_log.
+type ConsumptionEntry struct {
+	TransactionID uuid.UUID
+	BusinessID    uuid.UUID
+	ProductID     *uuid.UUID
+	ProductName   string
+	Ingredient    string
+	QuantityUsed  float64
+	Unit          string
+	ConfirmedAt   time.Time
 }
