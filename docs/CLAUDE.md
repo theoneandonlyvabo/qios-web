@@ -704,7 +704,7 @@ Buat file `.env` di `apps/server/api/` untuk local development. File ini tidak b
 ### Prasyarat
 
 - Node.js v24.15.0
-- Go 1.26.2
+- Go 1.25
 - Docker + Docker Compose
 
 ### Langkah
