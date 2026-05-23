@@ -1,54 +1,28 @@
 // core/transaction/repository.go
 //
-// Layer akses data untuk domain transaction.
-// Semua interaksi langsung ke tabel pos_orders dan pos_order_items ada di sini.
+// Layer akses data untuk domain transaction — read-only.
+// Domain ini hanya menyediakan FindByID dan List untuk history transaksi.
+// Write operations sudah dipindah ke domain /pos.
 
 package transaction
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 )
 
-// Repository mendefinisikan kontrak akses data transaksi.
+// Repository mendefinisikan kontrak akses data transaksi (read-only).
 type Repository interface {
-	// FindProducts dipakai service saat membuat order — ambil snapshot produk.
-	FindProducts(ctx context.Context, businessID uuid.UUID, ids []uuid.UUID) ([]productSnapshot, error)
-
-	// Create insert order + semua items dalam satu transaksi DB.
-	Create(ctx context.Context, order *Order, items []*OrderItem) error
-
 	// FindByID mengambil order beserta item-itemnya.
 	FindByID(ctx context.Context, id, businessID uuid.UUID) (*OrderWithItems, error)
 
 	// List mengambil orders dengan filter dan pagination.
 	List(ctx context.Context, businessID uuid.UUID, f ListFilter) ([]*Order, int, error)
-
-	// UpdateStatus mengupdate status dan field terkait (confirmed_at, payment_method).
-	UpdateStatus(ctx context.Context, id, businessID uuid.UUID, status Status, method *PaymentMethod, confirmedAt *sql.NullTime) error
-
-	// GetBusinessQrisString mengambil qris_string dari tabel businesses.
-	GetBusinessQrisString(ctx context.Context, businessID uuid.UUID) (*string, error)
-
-	// FindProductRecipes mengambil recipe JSONB untuk daftar product_id.
-	FindProductRecipes(ctx context.Context, productIDs []uuid.UUID) (map[uuid.UUID][]RecipeItem, error)
-
-	// InsertConsumptionLog menyimpan baris pemakaian bahan baku.
-	InsertConsumptionLog(ctx context.Context, entries []ConsumptionEntry) error
-}
-
-// productSnapshot adalah data produk yang di-snapshot ke order item.
-type productSnapshot struct {
-	id    uuid.UUID
-	name  string
-	price int64
 }
 
 // PostgresRepository adalah implementasi Repository di atas database/sql.
@@ -58,71 +32,6 @@ type PostgresRepository struct {
 
 func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
-}
-
-// ----------------------------------------------------------------
-// FindProducts
-// ----------------------------------------------------------------
-
-func (r *PostgresRepository) FindProducts(ctx context.Context, businessID uuid.UUID, ids []uuid.UUID) ([]productSnapshot, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, name, price FROM products
-		 WHERE id = ANY($1) AND business_id = $2 AND deleted_at IS NULL AND is_available = TRUE`,
-		pq.Array(ids), businessID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("transaction: find products: %w", err)
-	}
-	defer rows.Close()
-
-	var out []productSnapshot
-	for rows.Next() {
-		var s productSnapshot
-		if err := rows.Scan(&s.id, &s.name, &s.price); err != nil {
-			return nil, fmt.Errorf("transaction: scan product: %w", err)
-		}
-		out = append(out, s)
-	}
-	return out, rows.Err()
-}
-
-// ----------------------------------------------------------------
-// Create
-// ----------------------------------------------------------------
-
-func (r *PostgresRepository) Create(ctx context.Context, order *Order, items []*OrderItem) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("transaction: begin: %w", err)
-	}
-
-	err = tx.QueryRowContext(ctx,
-		`INSERT INTO pos_orders
-		 (business_id, operator_id, order_id, total_amount, payment_method, status, note)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 RETURNING id, created_at, updated_at`,
-		order.BusinessID, order.OperatorID, order.OrderID,
-		order.TotalAmount, order.PaymentMethod, order.Status, order.Note,
-	).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt)
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("transaction: insert order: %w", err)
-	}
-
-	for _, item := range items {
-		err = tx.QueryRowContext(ctx,
-			`INSERT INTO pos_order_items (pos_order_id, product_id, product_name, unit_price, quantity)
-			 VALUES ($1, $2, $3, $4, $5)
-			 RETURNING id`,
-			order.ID, item.ProductID, item.ProductName, item.UnitPrice, item.Quantity,
-		).Scan(&item.ID)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("transaction: insert item: %w", err)
-		}
-	}
-
-	return tx.Commit()
 }
 
 // ----------------------------------------------------------------
@@ -287,106 +196,4 @@ func buildListWhere(businessID uuid.UUID, f ListFilter) (string, []any) {
 	}
 
 	return strings.Join(conds, " AND "), args
-}
-
-// ----------------------------------------------------------------
-// GetBusinessQrisString
-// ----------------------------------------------------------------
-
-func (r *PostgresRepository) GetBusinessQrisString(ctx context.Context, businessID uuid.UUID) (*string, error) {
-	var qs sql.NullString
-	err := r.db.QueryRowContext(ctx,
-		`SELECT qris_string FROM businesses WHERE id = $1`,
-		businessID,
-	).Scan(&qs)
-	if err != nil {
-		return nil, fmt.Errorf("transaction: get business qris_string: %w", err)
-	}
-	if qs.Valid {
-		return &qs.String, nil
-	}
-	return nil, nil
-}
-
-// ----------------------------------------------------------------
-// UpdateStatus
-// ----------------------------------------------------------------
-
-func (r *PostgresRepository) UpdateStatus(ctx context.Context, id, businessID uuid.UUID, status Status, method *PaymentMethod, confirmedAt *sql.NullTime) error {
-	var methodStr *string
-	if method != nil {
-		s := string(*method)
-		methodStr = &s
-	}
-
-	var confirmedAtVal interface{}
-	if confirmedAt != nil && confirmedAt.Valid {
-		confirmedAtVal = confirmedAt.Time
-	}
-
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE pos_orders
-		 SET status         = $1,
-		     payment_method = COALESCE($2, payment_method),
-		     confirmed_at   = COALESCE($3, confirmed_at),
-		     updated_at     = NOW()
-		 WHERE id = $4 AND business_id = $5 AND status = 'PENDING'`,
-		status, methodStr, confirmedAtVal, id, businessID,
-	)
-	if err != nil {
-		return fmt.Errorf("transaction: update status: %w", err)
-	}
-	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		return ErrNotPending
-	}
-	return nil
-}
-
-func (r *PostgresRepository) FindProductRecipes(ctx context.Context, productIDs []uuid.UUID) (map[uuid.UUID][]RecipeItem, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, recipe FROM products WHERE id = ANY($1) AND recipe IS NOT NULL`,
-		pq.Array(productIDs),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("transaction: find recipes: %w", err)
-	}
-	defer rows.Close()
-
-	out := make(map[uuid.UUID][]RecipeItem)
-	for rows.Next() {
-		var id uuid.UUID
-		var raw []byte
-		if err := rows.Scan(&id, &raw); err != nil {
-			return nil, err
-		}
-		var items []RecipeItem
-		if err := json.Unmarshal(raw, &items); err == nil {
-			out[id] = items
-		}
-	}
-	return out, rows.Err()
-}
-
-func (r *PostgresRepository) InsertConsumptionLog(ctx context.Context, entries []ConsumptionEntry) error {
-	if len(entries) == 0 {
-		return nil
-	}
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO consumption_log
-			 (transaction_id, business_id, product_id, product_name, ingredient, quantity_used, unit, confirmed_at)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-			e.TransactionID, e.BusinessID, e.ProductID, e.ProductName,
-			e.Ingredient, e.QuantityUsed, e.Unit, e.ConfirmedAt,
-		); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("transaction: insert consumption_log: %w", err)
-		}
-	}
-	return tx.Commit()
 }
