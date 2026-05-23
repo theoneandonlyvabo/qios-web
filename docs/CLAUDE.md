@@ -60,7 +60,7 @@ Satu user (owner) hanya bisa memiliki satu bisnis. Untuk bisnis berbeda, harus m
 
 ```
 qios-web/
-├── app/
+├── apps/
 │   ├── client/
 │   │   ├── admin/          # Next.js — admin panel Skalar staff
 │   │   ├── dashboard/      # Next.js — interface owner, desktop-first
@@ -88,7 +88,7 @@ qios-web/
 └── infra/                  # Docker compose, deployment configs
 ```
 
-Tiga client app independen yang share backend API. Dashboard, operator, dan admin di-deploy terpisah dengan domain/subdomain berbeda. AI service co-located di `app/server/ai/` sebagai binary terpisah dari API — bisa di-deploy bareng atau pisah tergantung kebutuhan.
+Tiga client app independen yang share backend API. Dashboard, operator, dan admin di-deploy terpisah dengan domain/subdomain berbeda. AI service co-located di `apps/server/ai/` sebagai binary terpisah dari API — bisa di-deploy bareng atau pisah tergantung kebutuhan.
 
 **Reasoning client split (vs monorepo 1 app dengan route group):**
 - **Security surface jelas.** JWT scope berbeda per app. Token operator tidak bisa hit endpoint dashboard, dan sebaliknya. Tablet operator di counter tidak menjadi gateway ke data revenue owner.
@@ -100,7 +100,7 @@ Tiga client app independen yang share backend API. Dashboard, operator, dan admi
 
 **Stack:** Next.js 16.2.6, TypeScript, Tailwind CSS v4, Recharts, npm
 
-**Path:** `app/client/dashboard/`
+**Path:** `apps/client/dashboard/`
 
 **Halaman:**
 
@@ -127,7 +127,7 @@ Tiga client app independen yang share backend API. Dashboard, operator, dan admi
 
 **Stack:** Next.js 16.2.6, TypeScript, Tailwind CSS v4, npm. PWA service worker di-add saat polish phase.
 
-**Path:** `app/client/operator/`
+**Path:** `apps/client/operator/`
 
 **Halaman:**
 
@@ -149,7 +149,7 @@ Tiga client app independen yang share backend API. Dashboard, operator, dan admi
 
 **Stack:** Next.js 16.2.6, TypeScript, Tailwind CSS v4, npm
 
-**Path:** `app/client/admin/`
+**Path:** `apps/client/admin/`
 
 **Halaman utama:**
 
@@ -178,12 +178,12 @@ PWA operator menambahkan `Permissions-Policy: camera=(self)` karena butuh akses 
 
 **Stack:** Go 1.25, Echo v4, PostgreSQL 16, `lib/pq`, `golang-jwt`, `godotenv`
 
-**Path:** `app/server/api/`
+**Path:** `apps/server/api/`
 
 **Struktur folder:**
 
 ```
-app/server/api/
+apps/server/api/
 ├── cmd/                    # entry point — main.go
 ├── config/                 # config.go — load semua env vars ke struct Config
 ├── core/                   # business + view domains
@@ -213,21 +213,21 @@ app/server/api/
 
 - Setiap domain di `core/` mengikuti pola `handler.go` → `service.go` → `repository.go`
 - Handler tidak boleh menyentuh database langsung — semua lewat service dan repository
-- Pattern canonical ada di `app/server/api/AGENTS.md` — `core/operator/` dijadikan referensi
+- Pattern canonical ada di `apps/server/api/AGENTS.md` — `core/operator/` dijadikan referensi
 - Domain bisnis (`auth`, `business`, `product`, `transaction`, `operator`, dst) punya tabel sendiri
 - Domain view (`dashboard`, `analytics`, `report`, `insight`) tidak punya tabel — service inject repository dari beberapa domain bisnis untuk aggregation
 - Dependency direction: view → bisnis. Bisnis tidak boleh depend on view.
 
 ### Server — AI Service
 
-**Path:** `app/server/ai/`
+**Path:** `apps/server/ai/`
 
 **Status:** Post-MVP. Selama MVP, insight rule-based dijalankan di `api/core/insight/` sebagai service biasa. AI service di-spin up saat sudah ada cukup data dan kebutuhan inferensi yang nyata.
 
 **Struktur folder:**
 
 ```
-app/server/ai/
+apps/server/ai/
 ├── cmd/                    # binary entry point
 ├── config/                 # env loading
 ├── core/                   # AI logic core (model loading, inference)
@@ -239,7 +239,7 @@ app/server/ai/
 
 ### Bruno Collection
 
-**Path:** `app/server/bruno/`
+**Path:** `apps/server/bruno/`
 
 API collection di-commit ke repo untuk shared testing antar dev. Update saat ada endpoint baru atau request shape berubah.
 
@@ -695,7 +695,7 @@ Semua env vars dibaca via `config.Load()` di startup. Tidak ada `os.Getenv()` la
 
 **Wajib di-set saat startup:** `DB_PASSWORD`, `JWT_SECRET`, `JWT_ADMIN_SECRET`, `ENCRYPTION_KEY`. Startup gagal kalau kosong.
 
-Buat file `.env` di `app/server/api/` untuk local development. File ini tidak boleh di-commit — sudah ada di `.gitignore`.
+Buat file `.env` di `apps/server/api/` untuk local development. File ini tidak boleh di-commit — sudah ada di `.gitignore`.
 
 ---
 
@@ -704,7 +704,7 @@ Buat file `.env` di `app/server/api/` untuk local development. File ini tidak bo
 ### Prasyarat
 
 - Node.js v24.15.0
-- Go 1.26.2
+- Go 1.25
 - Docker + Docker Compose
 
 ### Langkah
@@ -717,7 +717,7 @@ cd qios-web
 
 **2. Buat file `.env` untuk api server:**
 ```bash
-cp app/server/api/.env.example app/server/api/.env
+cp apps/server/api/.env.example apps/server/api/.env
 # Edit sesuai kebutuhan local
 ```
 
@@ -728,7 +728,7 @@ docker compose -f infra/docker-compose.yml up postgres -d
 
 **4. Jalankan api server:**
 ```bash
-cd app/server/api
+cd apps/server/api
 go run ./cmd/...
 # Migration otomatis jalan saat startup
 ```
@@ -736,27 +736,27 @@ go run ./cmd/...
 **5. Jalankan client app (jalanin yang lo butuh aja):**
 ```bash
 # Dashboard owner
-cd app/client/dashboard && npm install && npm run dev   # http://localhost:3000
+cd apps/client/dashboard && npm install && npm run dev   # http://localhost:3000
 
 # Operator PWA
-cd app/client/operator && npm install && npm run dev    # http://localhost:3001
+cd apps/client/operator && npm install && npm run dev    # http://localhost:3001
 
 # Admin Skalar
-cd app/client/admin && npm install && npm run dev       # http://localhost:3002
+cd apps/client/admin && npm install && npm run dev       # http://localhost:3002
 ```
 
 Api server berjalan di `http://localhost:8080`.
 
 **6. Seed initial data (admin Skalar account untuk testing):**
 ```bash
-cd app/server/api
+cd apps/server/api
 go run ./cmd/seed
 # Output: admin email + temporary password
 ```
 
 **7. Bruno collection:**
 ```bash
-# Buka Bruno desktop client, open collection di app/server/bruno/
+# Buka Bruno desktop client, open collection di apps/server/bruno/
 # Set environment local, mulai testing endpoint
 ```
 
@@ -967,7 +967,7 @@ refactor: split dashboard service from analytics service
 - **Plan & features detail:** Daftar feature flag spesifik per plan masih placeholder. Board konfirmasi mapping plan ↔ features.
 - **Payment gateway integration (post-MVP):** DOKU dipertimbangkan untuk QRIS dinamis, masih belum fix vendor-nya. Arsitektur in-house transaction sekarang menyiapkan extension point.
 - **Inventory management real-time (post-MVP):** Consumption tracking sudah ada (aggregated), tapi stockout warning real-time belum di-design.
-- **LLM integration untuk AI Analytics (post-MVP):** `app/server/ai/` direncanakan sebagai service terpisah yang konsume `/reports` API. Schema insight sudah AI-ready (model_version, confidence_score nullable). Selama MVP, insight rule-based dijalankan di `api/core/insight/`.
+- **LLM integration untuk AI Analytics (post-MVP):** `apps/server/ai/` direncanakan sebagai service terpisah yang konsume `/reports` API. Schema insight sudah AI-ready (model_version, confidence_score nullable). Selama MVP, insight rule-based dijalankan di `api/core/insight/`.
 - **Auto-forward report ke WA/Telegram (post-MVP add-on):** Vendor (Fonnte / WAHA / Telegram Bot API) belum diputuskan. Gated by features flag, endpoint belum ada di contract.
 - **Self-serve registration (post-MVP):** Setelah 6 bulan offline-first onboarding atau ketika volume merchant mencapai threshold. Self-serve butuh KYC otomatis dan training material yang belum di-prep.
 - **Business status history audit (post-MVP):** Tabel `business_status_log` untuk full audit perubahan status. Slot disiapkan, schema belum implement.
@@ -980,9 +980,9 @@ refactor: split dashboard service from analytics service
 
 - `docs/qios-api.yml` — OpenAPI 3.0.3 contract lengkap v0.4
 - `AGENTS.md` (root) — panduan umum untuk AI agents
-- `app/server/api/AGENTS.md` — panduan implementasi spesifik api server
-- `app/client/dashboard/AGENTS.md` — panduan implementasi dashboard (kalau dibuat)
-- `app/client/operator/AGENTS.md` — panduan implementasi operator PWA (kalau dibuat)
-- `app/client/admin/AGENTS.md` — panduan implementasi admin panel (kalau dibuat)
-- `app/server/bruno/` — Bruno API collection untuk testing
+- `apps/server/api/AGENTS.md` — panduan implementasi spesifik api server
+- `apps/client/dashboard/AGENTS.md` — panduan implementasi dashboard (kalau dibuat)
+- `apps/client/operator/AGENTS.md` — panduan implementasi operator PWA (kalau dibuat)
+- `apps/client/admin/AGENTS.md` — panduan implementasi admin panel (kalau dibuat)
+- `apps/server/bruno/` — Bruno API collection untuk testing
 - PRD QIOS — dokumen product requirement lengkap (source of truth untuk product decisions)

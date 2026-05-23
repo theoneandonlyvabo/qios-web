@@ -33,7 +33,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/response"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/response"
 )
 
 const refreshTokenCookieName = "admin_refresh_token"

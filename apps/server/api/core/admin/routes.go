@@ -4,7 +4,7 @@ package admin
 
 import (
 	"github.com/labstack/echo/v4"
-	appmiddleware "github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/middleware"
+	appmiddleware "github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/middleware"
 )
 
 func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc) {

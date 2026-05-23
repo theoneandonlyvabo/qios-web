@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/theoneandonlyvabo/qios-web/app/server/api/config"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/config"
 )
 
 type Service struct {

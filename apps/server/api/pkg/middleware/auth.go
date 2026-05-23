@@ -20,8 +20,8 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
-	"github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/jwt"
-	"github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/response"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/jwt"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/response"
 )
 
 // RequireAuth memverifikasi Bearer JWT dan inject claims ke context.

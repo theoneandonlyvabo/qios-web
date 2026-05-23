@@ -77,7 +77,7 @@ type Business struct {
 	Address      *string   `json:"address"`
 	City         *string   `json:"city"`
 	Country      *string   `json:"country"`
-	XenditStatus string    `json:"xendit_status"`
+	MerchantStatus string    `json:"merchant_status"`
 	QrisString   *string   `json:"qris_string"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -103,7 +103,7 @@ type UpdateBusinessRequest struct {
 	Address      *string `json:"address"`
 	City         *string `json:"city"          validate:"omitempty,max=100"`
 	Country      *string `json:"country"       validate:"omitempty,max=100"`
-	XenditStatus *string `json:"xendit_status" validate:"omitempty,oneof=PENDING REGISTERED ACTIVE SUSPENDED"`
+	MerchantStatus *string `json:"merchant_status" validate:"omitempty,oneof=PENDING REGISTERED ACTIVE SUSPENDED"`
 }
 
 // AdminProduct — product row untuk admin (tanpa business scoping di lookup).

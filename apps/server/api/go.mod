@@ -1,4 +1,4 @@
-module github.com/theoneandonlyvabo/qios-web/app/server/api
+module github.com/theoneandonlyvabo/qios-web/apps/server/api
 
 go 1.25.0
 

@@ -134,7 +134,7 @@ func (r *PostgresRepository) DeleteAdminRefreshToken(ctx context.Context, tokenH
 // Business
 // ----------------------------------------------------------------
 
-const businessCols = `id, qios_id, user_id, business_name, phone, address, city, country, xendit_status, qris_string, created_at, updated_at`
+const businessCols = `id, qios_id, user_id, business_name, phone, address, city, country, merchant_status, qris_string, created_at, updated_at`
 
 func scanBusiness(row interface{ Scan(...any) error }) (*Business, error) {
 	var b Business
@@ -142,7 +142,7 @@ func scanBusiness(row interface{ Scan(...any) error }) (*Business, error) {
 	err := row.Scan(
 		&b.ID, &b.QiosID, &b.UserID, &b.BusinessName,
 		&phone, &address, &city, &country,
-		&b.XenditStatus, &qrisString,
+		&b.MerchantStatus, &qrisString,
 		&b.CreatedAt, &b.UpdatedAt,
 	)
 	if err != nil {
@@ -243,11 +243,11 @@ func (r *PostgresRepository) CreateBusiness(ctx context.Context, req CreateBusin
 		Address:      req.Address,
 		City:         req.City,
 		Country:      req.Country,
-		XenditStatus: "PENDING",
+		MerchantStatus: "PENDING",
 	}
 
 	err = tx.QueryRowContext(ctx,
-		`INSERT INTO businesses (qios_id, user_id, business_name, phone, address, city, country, xendit_status)
+		`INSERT INTO businesses (qios_id, user_id, business_name, phone, address, city, country, merchant_status)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')
 		 RETURNING id, created_at, updated_at`,
 		b.QiosID, b.UserID, b.BusinessName, b.Phone, b.Address, b.City, b.Country,
@@ -262,9 +262,9 @@ func (r *PostgresRepository) CreateBusiness(ctx context.Context, req CreateBusin
 func (r *PostgresRepository) UpdateBusiness(ctx context.Context, b *Business) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE businesses
-		 SET business_name=$1, phone=$2, address=$3, city=$4, country=$5, xendit_status=$6, updated_at=NOW()
+		 SET business_name=$1, phone=$2, address=$3, city=$4, country=$5, merchant_status=$6, updated_at=NOW()
 		 WHERE id=$7`,
-		b.BusinessName, b.Phone, b.Address, b.City, b.Country, b.XenditStatus, b.ID,
+		b.BusinessName, b.Phone, b.Address, b.City, b.Country, b.MerchantStatus, b.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("admin: update business: %w", err)
