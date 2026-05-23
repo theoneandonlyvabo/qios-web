@@ -13,9 +13,6 @@ func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc
 	// Owner-only: list semua transaksi dengan filter + pagination
 	g.GET("", h.List, appmiddleware.RequireOwner)
 
-	// Owner + operator: create, read, confirm, void
-	g.POST("", h.Create, appmiddleware.RequireOperator)
+	// Owner + operator: baca detail transaksi
 	g.GET("/:transaction_id", h.GetByID, appmiddleware.RequireOperator)
-	g.POST("/:transaction_id/confirm", h.Confirm, appmiddleware.RequireOperator)
-	g.POST("/:transaction_id/void", h.Void, appmiddleware.RequireOperator)
 }
