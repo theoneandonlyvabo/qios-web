@@ -1,21 +1,17 @@
 // core/transaction/handler.go
 //
-// Layer HTTP untuk domain transaction.
+// Layer HTTP untuk domain transaction — read-only.
 //
 // Owner routes:
-//   GET  /transactions              → List (dengan filter & pagination)
+//   GET /transactions              → List (dengan filter & pagination)
 //
 // Owner + operator routes:
-//   POST /transactions              → Create
-//   GET  /transactions/:id         → GetByID
-//   POST /transactions/:id/confirm → Confirm (tandai paid + set payment_method)
-//   POST /transactions/:id/void    → Void (batalkan pending order)
+//   GET /transactions/:transaction_id → GetByID
 
 package transaction
 
 import (
 	"errors"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -46,18 +42,6 @@ func businessIDFromCtx(c echo.Context) (uuid.UUID, error) {
 	return id, nil
 }
 
-func operatorIDFromCtx(c echo.Context) *uuid.UUID {
-	raw, _ := c.Get("operator_id").(string)
-	if raw == "" {
-		return nil
-	}
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return nil
-	}
-	return &id
-}
-
 func transactionIDParam(c echo.Context) (uuid.UUID, error) {
 	id, err := uuid.Parse(c.Param("transaction_id"))
 	if err != nil {
@@ -67,19 +51,10 @@ func transactionIDParam(c echo.Context) (uuid.UUID, error) {
 }
 
 func mapServiceError(c echo.Context, err error) error {
-	switch {
-	case errors.Is(err, ErrNotFound):
+	if errors.Is(err, ErrNotFound) {
 		return response.NotFound(c)
-	case errors.Is(err, ErrNotPending):
-		return c.JSON(http.StatusConflict, map[string]any{
-			"success": false,
-			"error":   "transaction is not in pending status",
-		})
-	case errors.Is(err, ErrProductNotFound):
-		return response.BadRequest(c, err.Error())
-	default:
-		return response.Internal(c)
 	}
+	return response.Internal(c)
 }
 
 // ----------------------------------------------------------------
@@ -130,7 +105,7 @@ func (h *Handler) List(c echo.Context) error {
 	if s := c.QueryParam("limit"); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 1 || n > 100 {
-			return response.BadRequest(c, "limit harus antara 1–100")
+			return response.BadRequest(c, "limit harus antara 1-100")
 		}
 		f.Limit = n
 	}
@@ -140,30 +115,6 @@ func (h *Handler) List(c echo.Context) error {
 		return response.Internal(c)
 	}
 	return response.OK(c, result)
-}
-
-// POST /transactions
-func (h *Handler) Create(c echo.Context) error {
-	businessID, err := businessIDFromCtx(c)
-	if err != nil {
-		return response.BadRequest(c, err.Error())
-	}
-
-	var req CreateOrderRequest
-	if err := c.Bind(&req); err != nil {
-		return response.BadRequest(c, "invalid request body")
-	}
-	if err := c.Validate(&req); err != nil {
-		return response.BadRequest(c, err.Error())
-	}
-
-	operatorID := operatorIDFromCtx(c)
-
-	out, err := h.service.Create(c.Request().Context(), businessID, operatorID, req)
-	if err != nil {
-		return mapServiceError(c, err)
-	}
-	return response.Created(c, out)
 }
 
 // GET /transactions/:transaction_id
@@ -182,47 +133,4 @@ func (h *Handler) GetByID(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 	return response.OK(c, out)
-}
-
-// POST /transactions/:transaction_id/confirm
-func (h *Handler) Confirm(c echo.Context) error {
-	businessID, err := businessIDFromCtx(c)
-	if err != nil {
-		return response.BadRequest(c, err.Error())
-	}
-	txID, err := transactionIDParam(c)
-	if err != nil {
-		return response.BadRequest(c, err.Error())
-	}
-
-	var req ConfirmOrderRequest
-	if err := c.Bind(&req); err != nil {
-		return response.BadRequest(c, "invalid request body")
-	}
-	if err := c.Validate(&req); err != nil {
-		return response.BadRequest(c, err.Error())
-	}
-
-	out, err := h.service.Confirm(c.Request().Context(), businessID, txID, req)
-	if err != nil {
-		return mapServiceError(c, err)
-	}
-	return response.OK(c, out)
-}
-
-// POST /transactions/:transaction_id/void
-func (h *Handler) Void(c echo.Context) error {
-	businessID, err := businessIDFromCtx(c)
-	if err != nil {
-		return response.BadRequest(c, err.Error())
-	}
-	txID, err := transactionIDParam(c)
-	if err != nil {
-		return response.BadRequest(c, err.Error())
-	}
-
-	if err := h.service.Void(c.Request().Context(), businessID, txID); err != nil {
-		return mapServiceError(c, err)
-	}
-	return response.NoContent(c)
 }

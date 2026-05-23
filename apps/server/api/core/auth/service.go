@@ -5,10 +5,12 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/jwt"
@@ -18,6 +20,9 @@ type Service interface {
 	Login(ctx context.Context, email, password string) (*LoginResult, error)
 	Refresh(ctx context.Context, refreshTokenPlain string) (*RefreshResult, error)
 	Logout(ctx context.Context, refreshTokenPlain string) error
+
+	OperatorLoginWithCredentials(ctx context.Context, businessID uuid.UUID, operatorCode, password string) (*OperatorLoginResult, error)
+	OperatorLoginWithQR(ctx context.Context, qrToken string) (*OperatorLoginResult, error)
 }
 
 type service struct {
@@ -135,6 +140,60 @@ func generateRefreshToken() (plain, hashed string, err error) {
 func hashToken(plain string) string {
 	sum := sha256.Sum256([]byte(plain))
 	return hex.EncodeToString(sum[:])
+}
+
+// ----------------------------------------------------------------
+// Operator-facing login
+// ----------------------------------------------------------------
+
+func (s *service) OperatorLoginWithCredentials(ctx context.Context, businessID uuid.UUID, operatorCode, password string) (*OperatorLoginResult, error) {
+	op, err := s.repo.FindOperatorByCode(ctx, businessID, operatorCode)
+	if errors.Is(err, ErrInvalidCredentials) {
+		return nil, ErrInvalidCredentials
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !op.IsActive {
+		return nil, ErrOperatorInactive
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(op.PasswordHash), []byte(password)); err != nil {
+		return nil, ErrInvalidCredentials
+	}
+	return s.issueOperatorToken(op)
+}
+
+func (s *service) OperatorLoginWithQR(ctx context.Context, qrToken string) (*OperatorLoginResult, error) {
+	op, err := s.repo.FindOperatorByQRToken(ctx, qrToken)
+	if errors.Is(err, ErrInvalidCredentials) {
+		return nil, ErrInvalidCredentials
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !op.IsActive {
+		return nil, ErrOperatorInactive
+	}
+	return s.issueOperatorToken(op)
+}
+
+func (s *service) issueOperatorToken(op *OperatorLoginData) (*OperatorLoginResult, error) {
+	token, err := s.jwtSvc.IssueOperatorAccessToken(op.ID.String(), op.BusinessID.String())
+	if err != nil {
+		return nil, fmt.Errorf("auth service: issue operator token: %w", err)
+	}
+	return &OperatorLoginResult{
+		AccessToken: token,
+		Operator: OperatorInfo{
+			ID:           op.ID,
+			BusinessID:   op.BusinessID,
+			Name:         op.Name,
+			OperatorCode: op.OperatorCode,
+			IsActive:     op.IsActive,
+			CreatedAt:    op.CreatedAt,
+			UpdatedAt:    op.UpdatedAt,
+		},
+	}, nil
 }
 
 var _ Service = (*service)(nil)

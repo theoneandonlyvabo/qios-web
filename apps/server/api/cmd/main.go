@@ -15,7 +15,7 @@ import (
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/auth"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/dashboard"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/insight"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/operator"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/pos"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/product"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/report"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/transaction"
@@ -76,12 +76,14 @@ func main() {
 	authSvc := auth.NewService(authRepo, jwtSvc)
 	auth.RegisterRoutes(e, auth.NewHandler(authSvc))
 
-	user.RegisterRoutes(e, db, authMiddleware)
+	userRepo := user.NewPostgresRepository(db)
+	userPlan := user.NewPostgresPlanLookup(db)
+	userSvc := user.NewService(userRepo, userPlan)
+	user.RegisterRoutes(e, user.NewHandler(userSvc), authMiddleware)
 
-	operatorRepo := operator.NewPostgresRepository(db)
-	operatorPlan := operator.NewPostgresPlanLookup(db)
-	operatorSvc := operator.NewService(operatorRepo, operatorPlan, jwtSvc)
-	operator.RegisterRoutes(e, operator.NewHandler(operatorSvc), authMiddleware)
+	posRepo := pos.NewPostgresRepository(db)
+	posSvc := pos.NewService(posRepo)
+	pos.RegisterRoutes(e, pos.NewHandler(posSvc), authMiddleware)
 
 	productRepo := product.NewPostgresRepository(db)
 	productSvc := product.NewService(productRepo)
