@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
 
@@ -17,6 +18,9 @@ type Repository interface {
 	StoreRefreshToken(ctx context.Context, userID, tokenHash string, expiry time.Duration) error
 	DeleteRefreshToken(ctx context.Context, tokenHash string) error
 	FindRefreshToken(ctx context.Context, tokenHash string) (userID string, expiresAt time.Time, err error)
+
+	FindOperatorByCode(ctx context.Context, businessID uuid.UUID, code string) (*OperatorLoginData, error)
+	FindOperatorByQRToken(ctx context.Context, token string) (*OperatorLoginData, error)
 }
 
 type PostgresRepository struct {
@@ -134,6 +138,42 @@ func (r *PostgresRepository) FindRefreshToken(ctx context.Context, tokenHash str
 		return "", time.Time{}, fmt.Errorf("auth: find refresh token: %w", err)
 	}
 	return userID, expiresAt, nil
+}
+
+// FindOperatorByCode mengambil data login operator via operator_code + business_id.
+func (r *PostgresRepository) FindOperatorByCode(ctx context.Context, businessID uuid.UUID, code string) (*OperatorLoginData, error) {
+	var op OperatorLoginData
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, business_id, password_hash, is_active, name, operator_code, created_at, updated_at
+		 FROM operators
+		 WHERE business_id = $1 AND operator_code = $2 AND deleted_at IS NULL`,
+		businessID, code,
+	).Scan(&op.ID, &op.BusinessID, &op.PasswordHash, &op.IsActive, &op.Name, &op.OperatorCode, &op.CreatedAt, &op.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrInvalidCredentials
+	}
+	if err != nil {
+		return nil, fmt.Errorf("auth: find operator by code: %w", err)
+	}
+	return &op, nil
+}
+
+// FindOperatorByQRToken mengambil data login operator via qr_token global.
+func (r *PostgresRepository) FindOperatorByQRToken(ctx context.Context, token string) (*OperatorLoginData, error) {
+	var op OperatorLoginData
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, business_id, password_hash, is_active, name, operator_code, created_at, updated_at
+		 FROM operators
+		 WHERE qr_token = $1 AND deleted_at IS NULL`,
+		token,
+	).Scan(&op.ID, &op.BusinessID, &op.PasswordHash, &op.IsActive, &op.Name, &op.OperatorCode, &op.CreatedAt, &op.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrInvalidCredentials
+	}
+	if err != nil {
+		return nil, fmt.Errorf("auth: find operator by qr: %w", err)
+	}
+	return &op, nil
 }
 
 func isUniqueViolation(err error) bool {

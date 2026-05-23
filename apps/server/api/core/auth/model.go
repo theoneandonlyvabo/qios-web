@@ -3,6 +3,8 @@ package auth
 import (
 	"errors"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -13,6 +15,7 @@ var (
 	ErrQiosIDCollision    = errors.New("qios_id collision")
 	ErrRefreshNotFound    = errors.New("refresh token not found")
 	ErrSessionExpired     = errors.New("session expired")
+	ErrOperatorInactive   = errors.New("operator is inactive")
 )
 
 type User struct {
@@ -36,6 +39,35 @@ type RefreshResult struct {
 	AccessToken   string
 	RefreshToken  string
 	RefreshExpiry time.Duration
+}
+
+// OperatorLoginData — minimal operator data needed during login flow.
+type OperatorLoginData struct {
+	ID           uuid.UUID
+	BusinessID   uuid.UUID
+	PasswordHash string
+	IsActive     bool
+	Name         string
+	OperatorCode string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// OperatorInfo — operator data returned to client after login.
+type OperatorInfo struct {
+	ID           uuid.UUID `json:"id"`
+	BusinessID   uuid.UUID `json:"business_id"`
+	Name         string    `json:"name"`
+	OperatorCode string    `json:"operator_code"`
+	IsActive     bool      `json:"is_active"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// OperatorLoginResult — response for operator login endpoints.
+type OperatorLoginResult struct {
+	AccessToken string       `json:"access_token"`
+	Operator    OperatorInfo `json:"operator"`
 }
 
 const (
