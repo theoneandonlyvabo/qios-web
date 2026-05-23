@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/jwt"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/jwt"
 )
 
 type Service interface {

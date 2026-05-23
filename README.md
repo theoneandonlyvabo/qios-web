@@ -46,7 +46,7 @@
 
 ```
 qios-web/
-├── app/
+├── apps/
 │   ├── client/
 │   │   ├── dashboard/      # Next.js — interface owner (desktop-first)
 │   │   ├── operator/       # Next.js — PWA kasir (mobile-first, Android)
@@ -69,14 +69,14 @@ Tiga client app independen yang share satu backend API. Di-deploy ke subdomain b
 
 ## 🖥️ Dashboard App (Owner)
 
-**Path:** `app/client/dashboard/`  
+**Path:** `apps/client/dashboard/`  
 **Port dev:** `http://localhost:3000`
 
 ### Tanggung Jawabmu
 
 | ✅ Kamu handle | ❌ Jangan disentuh |
 |---|---|
-| Semua UI — halaman, komponen, layout | `app/server/` |
+| Semua UI — halaman, komponen, layout | `apps/server/` |
 | API Routes sebagai jembatan ke backend Go | `infra/database/migrations/` |
 | Auth guard dan redirect middleware | Konfigurasi database |
 | Token management (memory + localStorage) | File `.env` server |
@@ -90,7 +90,7 @@ Tiga client app independen yang share satu backend API. Di-deploy ke subdomain b
 ### Quickstart
 
 ```bash
-cd app/client/dashboard
+cd apps/client/dashboard
 npm install
 cp .env.example .env.local
 # Minta nilai .env.local ke project lead
@@ -102,8 +102,8 @@ Buka `http://localhost:3000`. Login page muncul = setup berhasil.
 ### Struktur Folder
 
 ```
-app/client/dashboard/
-├── app/
+apps/client/dashboard/
+├── apps/
 │   ├── (auth)/
 │   │   └── login/          # email/password + Google OAuth
 │   ├── dashboard/          # snapshot bisnis hari ini
@@ -157,14 +157,14 @@ git push origin feature/dashboard-statistics-chart
 
 ## 📱 Operator App PWA (Kasir)
 
-**Path:** `app/client/operator/`  
+**Path:** `apps/client/operator/`  
 **Port dev:** `http://localhost:3001`
 
 ### Tanggung Jawabmu
 
 | ✅ Kamu handle | ❌ Jangan disentuh |
 |---|---|
-| UI mobile-first untuk alur kasir | `app/server/` |
+| UI mobile-first untuk alur kasir | `apps/server/` |
 | QR scan login (kamera device) | `infra/database/migrations/` |
 | Slide-to-confirm gesture (≥800ms hold) | Konfigurasi database |
 | Offline indicator + error states | File `.env` server |
@@ -179,7 +179,7 @@ git push origin feature/dashboard-statistics-chart
 ### Quickstart
 
 ```bash
-cd app/client/operator
+cd apps/client/operator
 npm install
 cp .env.example .env.local
 npm run dev
@@ -190,8 +190,8 @@ Buka `http://localhost:3001`. Login QR atau credential muncul = setup berhasil.
 ### Struktur Folder
 
 ```
-app/client/operator/
-├── app/
+apps/client/operator/
+├── apps/
 │   ├── login/              # QR scan (primary) atau operator_code + password
 │   ├── order/              # pilih produk, set qty, cart
 │   ├── confirm/            # pilih payment method + slide-to-confirm
@@ -239,14 +239,14 @@ NEXT_PUBLIC_API_URL=http://localhost:8080
 
 ## 🛡 Admin App (Skalar Staff)
 
-**Path:** `app/client/admin/`  
+**Path:** `apps/client/admin/`  
 **Port dev:** `http://localhost:3002`
 
 ### Tanggung Jawabmu
 
 | ✅ Kamu handle | ❌ Jangan disentuh |
 |---|---|
-| UI onboarding merchant baru | `app/server/` |
+| UI onboarding merchant baru | `apps/server/` |
 | CRUD produk + recipe per merchant | `infra/database/migrations/` |
 | Manage plan, features, status merchant | Konfigurasi database |
 | Cross-merchant transaction view | File `.env` server |
@@ -260,7 +260,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8080
 ### Quickstart
 
 ```bash
-cd app/client/admin
+cd apps/client/admin
 npm install
 cp .env.example .env.local
 npm run dev
@@ -271,8 +271,8 @@ Buka `http://localhost:3002`. Login admin muncul = setup berhasil.
 ### Struktur Folder
 
 ```
-app/client/admin/
-├── app/
+apps/client/admin/
+├── apps/
 │   ├── login/              # admin email/password, scope admin
 │   ├── merchants/
 │   │   ├── page.tsx        # list semua business dengan filter status/plan
@@ -300,14 +300,14 @@ NEXT_PUBLIC_API_URL=http://localhost:8080
 
 ## ⚙️ Backend API
 
-**Path:** `app/server/api/`  
+**Path:** `apps/server/api/`  
 **Port dev:** `http://localhost:8080`
 
 ### Tanggung Jawabmu
 
 | ✅ Kamu handle | ❌ Jangan disentuh |
 |---|---|
-| Domain handler, service, repository | `app/client/` |
+| Domain handler, service, repository | `apps/client/` |
 | SQL migration files (append-only) | File `.env` client |
 | JWT issue dan verify per scope | Konfigurasi server client |
 | Bruno collection update saat ada endpoint baru | — |
@@ -325,7 +325,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8080
 git clone https://github.com/theoneandonlyvabo/qios-web.git
 cd qios-web
 
-cp app/server/api/.env.example app/server/api/.env
+cp apps/server/api/.env.example apps/server/api/.env
 # Edit .env: set DB_PASSWORD, JWT_SECRET, JWT_ADMIN_SECRET, ENCRYPTION_KEY
 ```
 
@@ -338,7 +338,7 @@ docker compose -f infra/docker-compose.yml up postgres -d
 **3. Jalankan API server:**
 
 ```bash
-cd app/server/api
+cd apps/server/api
 go run ./cmd/...
 # Migration otomatis jalan saat startup
 # Output: "Server running on :8080"
@@ -354,14 +354,14 @@ go run ./cmd/seed
 **5. Buka Bruno collection:**
 
 ```
-Buka Bruno desktop → open collection di app/server/bruno/
+Buka Bruno desktop → open collection di apps/server/bruno/
 Set environment "local" → mulai testing endpoint
 ```
 
 ### Struktur Folder
 
 ```
-app/server/api/
+apps/server/api/
 ├── cmd/                    # entry point — main.go
 ├── config/                 # config.go — load semua env vars ke struct Config
 ├── core/                   # domain-driven business + view logic
@@ -479,10 +479,10 @@ docs: update qios-api.yml with admin endpoints
 | Gejala | Solusi |
 |---|---|
 | `go mod tidy` error | Cek versi Go: `go version` harus `1.25+` |
-| Env var tidak terbaca | Nama file harus persis `.env` di `app/server/api/` |
+| Env var tidak terbaca | Nama file harus persis `.env` di `apps/server/api/` |
 | Tidak bisa connect ke PostgreSQL | Cek Docker: `docker compose -f infra/docker-compose.yml ps` |
 | Port 8080 dipakai proses lain | Ganti `APP_PORT` di `.env` |
-| Migration gagal saat startup | Jalankan dari direktori `app/server/api/`, bukan root repo |
+| Migration gagal saat startup | Jalankan dari direktori `apps/server/api/`, bukan root repo |
 | `401 Unauthorized` terus | Cek apakah token sudah expired — hit `/auth/refresh` |
 | `403 Forbidden` di endpoint admin | Butuh token scope `admin` dari `POST /admin/auth/login` |
 | QR scan tidak jalan di dev | Browser butuh permission kamera — pastikan `localhost` atau HTTPS |

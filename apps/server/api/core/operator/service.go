@@ -15,7 +15,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/theoneandonlyvabo/qios-web/app/server/api/pkg/jwt"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/jwt"
 	"golang.org/x/crypto/bcrypt"
 )
 
