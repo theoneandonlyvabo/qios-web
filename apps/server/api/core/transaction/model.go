@@ -1,13 +1,12 @@
 // core/transaction/model.go
 //
-// Tipe-tipe untuk domain transaction:
-//   - Order           → representasi baris di tabel pos_orders
-//   - OrderItem       → representasi baris di tabel pos_order_items
-//   - OrderWithItems  → Order + item-itemnya untuk response detail
-//   - ConfirmResponse → response confirm; menyertakan qris_string jika QRIS
+// Tipe-tipe untuk domain transaction (read-only log):
+//   - Order, OrderItem, OrderWithItems → representasi baris tabel
+//   - Status, PaymentMethod constants
+//   - ListFilter, ListResult → filter dan pagination untuk List
 //
-// Catatan: payment_method di-set saat confirm, bukan saat create.
-// total_amount dihitung server-side dari items — client tidak kirim total.
+// Domain ini hanya menyediakan akses baca ke history transaksi.
+// Write operations (create, confirm, void) sudah dipindah ke domain /pos.
 
 package transaction
 
@@ -19,15 +18,13 @@ import (
 )
 
 var (
-	ErrNotFound        = errors.New("transaction not found")
-	ErrNotPending      = errors.New("transaction is not pending")
-	ErrEmptyItems      = errors.New("transaction must have at least one item")
-	ErrProductNotFound = errors.New("one or more products not found or unavailable")
+	ErrNotFound = errors.New("transaction not found")
 )
 
 type Status string
 
 const (
+	StatusDraft     Status = "DRAFT"
 	StatusPending   Status = "PENDING"
 	StatusConfirmed Status = "CONFIRMED"
 	StatusVoided    Status = "VOIDED"
@@ -40,6 +37,7 @@ const (
 	PaymentQRIS           PaymentMethod = "QRIS"
 	PaymentEwallet        PaymentMethod = "EWALLET"
 	PaymentVirtualAccount PaymentMethod = "VIRTUAL_ACCOUNT"
+	PaymentTransfer       PaymentMethod = "TRANSFER"
 )
 
 // Order merepresentasikan satu baris di pos_orders.
@@ -58,7 +56,6 @@ type Order struct {
 }
 
 // OrderItem merepresentasikan satu baris di pos_order_items.
-// product_name dan unit_price adalah snapshot saat order dibuat.
 type OrderItem struct {
 	ID          uuid.UUID  `json:"id"`
 	ProductID   *uuid.UUID `json:"product_id"`
@@ -68,38 +65,10 @@ type OrderItem struct {
 	Subtotal    int64      `json:"subtotal"`
 }
 
-// OrderWithItems — response untuk GET /transactions/:id.
+// OrderWithItems — response GET /transactions/:id.
 type OrderWithItems struct {
 	Order
 	Items []*OrderItem `json:"items"`
-}
-
-// ----------------------------------------------------------------
-// Request types
-// ----------------------------------------------------------------
-
-// ItemInput — satu baris item pada POST /transactions.
-type ItemInput struct {
-	ProductID string `json:"product_id" validate:"required,uuid"`
-	Quantity  int    `json:"quantity"   validate:"required,min=1"`
-}
-
-// CreateOrderRequest — body POST /transactions.
-type CreateOrderRequest struct {
-	Items []ItemInput `json:"items" validate:"required,min=1,dive"`
-	Note  *string     `json:"note"  validate:"omitempty,max=500"`
-}
-
-// ConfirmOrderRequest — body POST /transactions/:id/confirm.
-type ConfirmOrderRequest struct {
-	PaymentMethod PaymentMethod `json:"payment_method" validate:"required,oneof=CASH QRIS EWALLET VIRTUAL_ACCOUNT"`
-}
-
-// ConfirmResponse — response POST /transactions/:id/confirm.
-// QrisString diisi hanya ketika payment_method = QRIS; nil untuk metode lain.
-type ConfirmResponse struct {
-	Order
-	QrisString *string `json:"qris_string,omitempty"`
 }
 
 // ----------------------------------------------------------------
@@ -121,23 +90,4 @@ type ListResult struct {
 	Total        int      `json:"total"`
 	Page         int      `json:"page"`
 	Limit        int      `json:"limit"`
-}
-
-// RecipeItem — satu baris dalam JSONB recipe produk.
-type RecipeItem struct {
-	Ingredient string  `json:"ingredient"`
-	Quantity   float64 `json:"quantity"`
-	Unit       string  `json:"unit"`
-}
-
-// ConsumptionEntry — satu baris untuk tabel consumption_log.
-type ConsumptionEntry struct {
-	TransactionID uuid.UUID
-	BusinessID    uuid.UUID
-	ProductID     *uuid.UUID
-	ProductName   string
-	Ingredient    string
-	QuantityUsed  float64
-	Unit          string
-	ConfirmedAt   time.Time
 }

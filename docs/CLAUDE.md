@@ -187,11 +187,11 @@ apps/server/api/
 ├── cmd/                    # entry point — main.go
 ├── config/                 # config.go — load semua env vars ke struct Config
 ├── core/                   # business + view domains
-│   ├── auth/               # owner login, Google OAuth, refresh, logout
-│   ├── user/               # profil owner + business info (GET/PATCH /business)
-│   ├── operator/           # CRUD operator (owner-side) + login PWA operator
+│   ├── auth/               # owner login, Google OAuth, refresh, logout + operator login/QR
+│   ├── user/               # profil owner + business info + operator CRUD (owner-side)
 │   ├── product/            # read-only owner endpoint
-│   ├── transaction/        # order create, confirm, void + consumption_log
+│   ├── pos/                # orchestrator order kasir: cart, DRAFT→CONFIRMED flow, slide-to-confirm, sessions
+│   ├── transaction/        # read-only log: owner history + filter
 │   ├── dashboard/          # view: summary, trend, peak hours, top products
 │   ├── analytics/          # view: deeper dive dengan custom timeframe + comparison
 │   ├── report/             # view: daily/monthly sales, consumption, export
@@ -207,14 +207,14 @@ apps/server/api/
     └── encryption/         # AES-256 untuk data sensitif (placeholder)
 ```
 
-> **Implementasi saat ini:** Domain `business/` di-merge ke dalam `user/` domain (owner satu bisnis). Domain `consumption/` di-handle sebagai background step di dalam `transaction/` domain saat status CONFIRMED. Struktur folder di atas adalah target spec — actual folder: `auth`, `user`, `operator`, `product`, `transaction`, `dashboard`, `analytics`, `report`, `insight`, `admin`.
+> **Implementasi saat ini:** Domain `business/` di-merge ke dalam `user/` domain (owner satu bisnis). Domain `consumption/` di-handle sebagai background goroutine di dalam `pos/` domain saat CONFIRMED. Actual folder: `auth`, `user`, `product`, `pos`, `transaction`, `dashboard`, `analytics`, `report`, `insight`, `admin`.
 
 **Konvensi domain:**
 
 - Setiap domain di `core/` mengikuti pola `handler.go` → `service.go` → `repository.go`
 - Handler tidak boleh menyentuh database langsung — semua lewat service dan repository
-- Pattern canonical ada di `apps/server/api/AGENTS.md` — `core/operator/` dijadikan referensi
-- Domain bisnis (`auth`, `business`, `product`, `transaction`, `operator`, dst) punya tabel sendiri
+- Pattern canonical ada di `apps/server/api/AGENTS.md` — `core/user/` dijadikan referensi
+- Domain bisnis (`auth`, `user`, `product`, `pos`, `transaction`, dst) punya tabel sendiri
 - Domain view (`dashboard`, `analytics`, `report`, `insight`) tidak punya tabel — service inject repository dari beberapa domain bisnis untuk aggregation
 - Dependency direction: view → bisnis. Bisnis tidak boleh depend on view.
 

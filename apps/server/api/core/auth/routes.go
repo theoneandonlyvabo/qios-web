@@ -21,5 +21,8 @@ func RegisterRoutes(e *echo.Echo, h *Handler) {
 	// Google OAuth — post-MVP
 	auth.POST("/google/login", h.GoogleLogin)
 
-	// Operator (kasir) login dipindah ke domain/operator → /kasir/auth/login
+	// Operator (kasir) login — public, no JWT required
+	kasir := e.Group("/kasir/auth")
+	kasir.POST("/login", h.OperatorLoginWithCredentials)
+	kasir.POST("/login/qr", h.OperatorLoginWithQR)
 }

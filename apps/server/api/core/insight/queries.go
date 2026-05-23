@@ -63,13 +63,13 @@ func (q *Queries) revenueTrend(ctx context.Context, businessID uuid.UUID, now ti
 	var thisRev, lastRev int64
 	_ = q.db.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(total_amount), 0) FROM pos_orders
-		 WHERE business_id = $1 AND status = 'paid'
+		 WHERE business_id = $1 AND status = 'CONFIRMED'
 		   AND DATE(created_at) >= DATE($2) AND DATE(created_at) <= DATE($3)`,
 		businessID, thisWeekStart.Format("2006-01-02"), now.Format("2006-01-02"),
 	).Scan(&thisRev)
 	_ = q.db.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(total_amount), 0) FROM pos_orders
-		 WHERE business_id = $1 AND status = 'paid'
+		 WHERE business_id = $1 AND status = 'CONFIRMED'
 		   AND DATE(created_at) >= DATE($2) AND DATE(created_at) <= DATE($3)`,
 		businessID, lastWeekStart.Format("2006-01-02"), lastWeekEnd.Format("2006-01-02"),
 	).Scan(&lastRev)
@@ -106,7 +106,7 @@ func (q *Queries) topProductToday(ctx context.Context, businessID uuid.UUID, tod
 		`SELECT oi.product_name, SUM(oi.quantity)
 		 FROM pos_order_items oi
 		 JOIN pos_orders o ON o.id = oi.pos_order_id
-		 WHERE o.business_id = $1 AND o.status = 'paid' AND DATE(o.created_at) = $2
+		 WHERE o.business_id = $1 AND o.status = 'CONFIRMED' AND DATE(o.created_at) = $2
 		 GROUP BY oi.product_name
 		 ORDER BY SUM(oi.quantity) DESC
 		 LIMIT 1`,
@@ -131,7 +131,7 @@ func (q *Queries) peakHour(ctx context.Context, businessID uuid.UUID, startStr, 
 	err := q.db.QueryRowContext(ctx,
 		`SELECT EXTRACT(HOUR FROM created_at)::int, COUNT(*)
 		 FROM pos_orders
-		 WHERE business_id = $1 AND status = 'paid'
+		 WHERE business_id = $1 AND status = 'CONFIRMED'
 		   AND DATE(created_at) >= $2 AND DATE(created_at) <= $3
 		 GROUP BY EXTRACT(HOUR FROM created_at)
 		 ORDER BY COUNT(*) DESC

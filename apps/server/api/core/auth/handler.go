@@ -8,10 +8,12 @@
 // Access token dikembalikan di response body, disimpan di memory client.
 //
 // Endpoint:
-//   POST /auth/login         → Login
-//   POST /auth/refresh       → Refresh
-//   POST /auth/logout        → Logout
-//   POST /auth/google/login  → GoogleLogin (post-MVP)
+//   POST /auth/login            → Login (owner)
+//   POST /auth/refresh          → Refresh
+//   POST /auth/logout           → Logout
+//   POST /auth/google/login     → GoogleLogin (post-MVP)
+//   POST /kasir/auth/login      → OperatorLoginWithCredentials (public)
+//   POST /kasir/auth/login/qr   → OperatorLoginWithQR (public)
 
 package auth
 
@@ -20,6 +22,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/response"
@@ -142,6 +145,60 @@ func (h *Handler) Logout(c echo.Context) error {
 }
 
 // ----------------------------------------------------------------
+// Operator auth handlers (public — no JWT required)
+// ----------------------------------------------------------------
+
+type operatorCredentialsRequest struct {
+	BusinessID   string `json:"business_id"`
+	OperatorCode string `json:"operator_code"`
+	Password     string `json:"password"`
+}
+
+type operatorQRRequest struct {
+	QRToken string `json:"qr_token"`
+}
+
+// OperatorLoginWithCredentials — kasir login via operator_code + password.
+// POST /kasir/auth/login
+func (h *Handler) OperatorLoginWithCredentials(c echo.Context) error {
+	var req operatorCredentialsRequest
+	if err := c.Bind(&req); err != nil {
+		return response.BadRequest(c, "invalid request body")
+	}
+	if req.BusinessID == "" || req.OperatorCode == "" || req.Password == "" {
+		return response.BadRequest(c, "business_id, operator_code, dan password wajib diisi")
+	}
+	businessID, err := uuid.Parse(req.BusinessID)
+	if err != nil {
+		return response.BadRequest(c, "business_id tidak valid")
+	}
+
+	out, err := h.service.OperatorLoginWithCredentials(c.Request().Context(), businessID, req.OperatorCode, req.Password)
+	if err != nil {
+		return mapServiceError(c, err)
+	}
+	return response.OK(c, out)
+}
+
+// OperatorLoginWithQR — kasir login via QR token scan.
+// POST /kasir/auth/login/qr
+func (h *Handler) OperatorLoginWithQR(c echo.Context) error {
+	var req operatorQRRequest
+	if err := c.Bind(&req); err != nil {
+		return response.BadRequest(c, "invalid request body")
+	}
+	if req.QRToken == "" {
+		return response.BadRequest(c, "qr_token wajib diisi")
+	}
+
+	out, err := h.service.OperatorLoginWithQR(c.Request().Context(), req.QRToken)
+	if err != nil {
+		return mapServiceError(c, err)
+	}
+	return response.OK(c, out)
+}
+
+// ----------------------------------------------------------------
 // Error mapper
 // ----------------------------------------------------------------
 
@@ -154,6 +211,8 @@ func mapServiceError(c echo.Context, err error) error {
 		return response.UnauthorizedMsg(c, "sesi telah berakhir, silakan login kembali")
 	case errors.Is(err, ErrAccountInactive):
 		return response.ForbiddenMsg(c, "account is inactive or suspended")
+	case errors.Is(err, ErrOperatorInactive):
+		return response.ForbiddenMsg(c, "Akun operator dinonaktifkan")
 	case errors.Is(err, ErrGoogleOnlyAccount):
 		return response.BadRequest(c, "this account uses Google login")
 	case errors.Is(err, ErrEmailTaken):
@@ -164,3 +223,4 @@ func mapServiceError(c echo.Context, err error) error {
 		return response.Internal(c)
 	}
 }
+

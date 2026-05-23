@@ -27,7 +27,7 @@ func (q *Queries) fetchSummary(ctx context.Context, businessID uuid.UUID, start,
 		    COUNT(*),
 		    COALESCE(ROUND(AVG(total_amount)), 0)
 		 FROM pos_orders
-		 WHERE business_id = $1 AND status = 'paid'
+		 WHERE business_id = $1 AND status = 'CONFIRMED'
 		   AND DATE(created_at) >= DATE($2) AND DATE(created_at) <= DATE($3)`,
 		businessID, start, end,
 	).Scan(&s.TotalRevenue, &s.TotalTransactions, &s.AvgTransactionValue)
@@ -44,7 +44,7 @@ func (q *Queries) fetchDailyBreakdown(ctx context.Context, businessID uuid.UUID,
 		    COUNT(*),
 		    COALESCE(SUM(total_amount), 0)
 		 FROM pos_orders
-		 WHERE business_id = $1 AND status = 'paid'
+		 WHERE business_id = $1 AND status = 'CONFIRMED'
 		   AND DATE(created_at) >= DATE($2) AND DATE(created_at) <= DATE($3)
 		 GROUP BY DATE(created_at)
 		 ORDER BY DATE(created_at) ASC`,
