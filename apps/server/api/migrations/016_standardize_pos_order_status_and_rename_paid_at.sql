@@ -1,8 +1,9 @@
--- 016_fix_transaction_status.sql
+-- 016_standardize_pos_order_status_and_rename_paid_at.sql
 -- Ganti status pos_orders dari Xendit-era lowercase ke in-house uppercase.
 -- PENDING → order dibuat, belum dikonfirmasi
 -- CONFIRMED → kasir konfirmasi + payment_method di-set
 -- VOIDED → dibatalkan
+-- Sekaligus rename kolom paid_at → confirmed_at (lebih akurat untuk in-house flow)
 
 ALTER TABLE pos_orders DROP CONSTRAINT IF EXISTS pos_orders_status_check;
 

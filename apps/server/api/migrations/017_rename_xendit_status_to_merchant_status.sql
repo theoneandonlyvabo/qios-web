@@ -1,4 +1,4 @@
--- 017_rename_merchant_status.sql
+-- 017_rename_xendit_status_to_merchant_status.sql
 -- Rename xendit_status → merchant_status di tabel businesses.
 -- Semantik sama (PENDING/REGISTERED/ACTIVE/SUSPENDED), nama lebih netral.
 

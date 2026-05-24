@@ -17,8 +17,6 @@ WORKDIR /app
 
 COPY --from=builder /build/server .
 
-# Merge both migration directories into one — migrate.go globs migrations/*.sql from CWD
-COPY infra/database/migrations/ ./migrations/
 COPY apps/server/api/migrations/ ./migrations/
 
 EXPOSE 8080

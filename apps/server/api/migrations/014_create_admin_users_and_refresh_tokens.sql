@@ -1,4 +1,4 @@
--- 014_create_admin_users.sql
+-- 014_create_admin_users_and_refresh_tokens.sql
 -- Tabel terpisah untuk admin Skalar (bukan owner bisnis).
 -- Admin menggunakan refresh token di tabel admin_refresh_tokens yang terpisah.
 
