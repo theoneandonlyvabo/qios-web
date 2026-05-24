@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -62,13 +66,21 @@ func main() {
 		log.Fatalf("migration failed: %v", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Bersihkan refresh token yang sudah expired setiap 24 jam.
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
-		for range ticker.C {
-			_, _ = db.Exec(`DELETE FROM refresh_tokens WHERE expires_at < NOW()`)
-			_, _ = db.Exec(`DELETE FROM admin_refresh_tokens WHERE expires_at < NOW()`)
+		for {
+			select {
+			case <-ticker.C:
+				_, _ = db.Exec(`DELETE FROM refresh_tokens WHERE expires_at < NOW()`)
+				_, _ = db.Exec(`DELETE FROM admin_refresh_tokens WHERE expires_at < NOW()`)
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
@@ -101,6 +113,12 @@ func main() {
 	e.Use(echoprometheus.NewMiddleware("qios"))
 	e.GET("/metrics", echoprometheus.NewHandler(), metricsGuard())
 	e.GET("/health", func(c echo.Context) error {
+		if err := db.Ping(); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{
+				"status": "unhealthy",
+				"error":  "database unreachable",
+			})
+		}
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 
@@ -136,8 +154,21 @@ func main() {
 	adminSvc := adminpkg.NewService(adminRepo, jwtSvc)
 	adminpkg.RegisterRoutes(e, adminpkg.NewHandler(adminSvc), authMiddleware)
 
-	applogger.Info("server starting on port %s", cfg.AppPort)
-	if err := e.Start(":" + cfg.AppPort); err != nil {
-		log.Fatalf("server error: %v", err)
+	go func() {
+		applogger.Info("server starting on port %s", cfg.AppPort)
+		if err := e.Start(":" + cfg.AppPort); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+	<-quit
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("graceful shutdown failed: %v", err)
 	}
+	applogger.Info("server stopped gracefully")
 }
