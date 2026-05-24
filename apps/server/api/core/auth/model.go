@@ -54,14 +54,14 @@ type OperatorLoginData struct {
 }
 
 // OperatorInfo — operator data returned to client after login.
+// OperatorCode tidak disertakan di sini — itu credential, tidak boleh balik ke client via response body.
 type OperatorInfo struct {
-	ID           uuid.UUID `json:"id"`
-	BusinessID   uuid.UUID `json:"business_id"`
-	Name         string    `json:"name"`
-	OperatorCode string    `json:"operator_code"`
-	IsActive     bool      `json:"is_active"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID         uuid.UUID `json:"id"`
+	BusinessID uuid.UUID `json:"business_id"`
+	Name       string    `json:"name"`
+	IsActive   bool      `json:"is_active"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // OperatorLoginResult — response for operator login endpoints.

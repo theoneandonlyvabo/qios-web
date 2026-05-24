@@ -208,8 +208,13 @@ func (s *service) ConfirmCheckout(ctx context.Context, businessID, orderID uuid.
 		return nil, err
 	}
 
-	// Populate consumption_log asynchronously
-	go s.populateConsumptionLog(context.Background(), result, businessID, now)
+	// Populate consumption_log asynchronously — pakai timeout 30s, bukan Background()
+	// supaya goroutine tidak leak selamanya kalau DB shutdown atau hang.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.populateConsumptionLog(ctx, result, businessID, now)
+	}()
 
 	res := &ConfirmResponse{Order: result.Order}
 

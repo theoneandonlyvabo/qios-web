@@ -69,9 +69,26 @@ func (h *Handler) List(c echo.Context) error {
 		return response.BadRequest(c, err.Error())
 	}
 
-	f := ListFilter{
-		Status:        c.QueryParam("status"),
-		PaymentMethod: c.QueryParam("payment_method"),
+	validStatuses := map[string]bool{
+		"DRAFT": true, "CONFIRMED": true, "VOIDED": true,
+	}
+	validPaymentMethods := map[string]bool{
+		"CASH": true, "QRIS": true, "EWALLET": true,
+		"VIRTUAL_ACCOUNT": true, "TRANSFER": true,
+	}
+
+	f := ListFilter{}
+	if s := c.QueryParam("status"); s != "" {
+		if !validStatuses[s] {
+			return response.BadRequest(c, "status tidak valid, pilih: DRAFT, CONFIRMED, VOIDED")
+		}
+		f.Status = s
+	}
+	if pm := c.QueryParam("payment_method"); pm != "" {
+		if !validPaymentMethods[pm] {
+			return response.BadRequest(c, "payment_method tidak valid, pilih: CASH, QRIS, EWALLET, VIRTUAL_ACCOUNT, TRANSFER")
+		}
+		f.PaymentMethod = pm
 	}
 
 	if s := c.QueryParam("start_date"); s != "" {

@@ -8,14 +8,14 @@ import (
 )
 
 func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc) {
-	// Owner profile
+	// Owner profile — hanya owner yang punya profil di tabel users
 	g := e.Group("/users", authMiddleware)
-	g.GET("/me", h.GetMe)
+	g.GET("/me", h.GetMe, appmiddleware.RequireOwner)
 	g.PATCH("/me", h.UpdateMe, appmiddleware.RequireOwner)
 
-	// Business info
+	// Business info — owner dan operator bisa lihat (operator butuh ini untuk POS)
 	b := e.Group("/business", authMiddleware)
-	b.GET("", h.GetBusiness)
+	b.GET("", h.GetBusiness, appmiddleware.RequireOperator)
 	b.PATCH("", h.UpdateBusiness, appmiddleware.RequireOwner)
 
 	// Operator CRUD — owner only

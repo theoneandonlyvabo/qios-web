@@ -16,10 +16,13 @@ type Config struct {
 	DBUser     string
 	DBPassword string
 	DBName     string
+	DBSSLMode  string
 
 	JWTSecret        string
 	JWTAccessExpiry  string
 	JWTRefreshExpiry string
+
+	CORSAllowedOrigins string
 }
 
 func Load() *Config {
@@ -35,23 +38,28 @@ func Load() *Config {
 		DBUser:     getEnv("DB_USER", "postgres"),
 		DBPassword: getEnv("DB_PASSWORD", ""),
 		DBName:     getEnv("DB_NAME", "qios"),
+		DBSSLMode:  getEnv("DB_SSL_MODE", "disable"),
 
 		JWTSecret:        getEnv("JWT_SECRET", ""),
 		JWTAccessExpiry:  getEnv("JWT_ACCESS_EXPIRY", "15m"),
 		JWTRefreshExpiry: getEnv("JWT_REFRESH_EXPIRY", "720h"),
+
+		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
 	}
 }
 
 func (c *Config) Validate() error {
-	var missing []string
+	var errs []string
 	if c.JWTSecret == "" {
-		missing = append(missing, "JWT_SECRET")
+		errs = append(errs, "JWT_SECRET is required")
+	} else if len(c.JWTSecret) < 32 {
+		errs = append(errs, "JWT_SECRET must be at least 32 characters")
 	}
 	if c.DBPassword == "" {
-		missing = append(missing, "DB_PASSWORD")
+		errs = append(errs, "DB_PASSWORD is required")
 	}
-	if len(missing) > 0 {
-		return fmt.Errorf("config: required env vars not set: %v", missing)
+	if len(errs) > 0 {
+		return fmt.Errorf("config: %v", errs)
 	}
 	return nil
 }

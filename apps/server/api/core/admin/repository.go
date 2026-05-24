@@ -228,10 +228,9 @@ func (r *PostgresRepository) CreateBusiness(ctx context.Context, req CreateBusin
 	}
 
 	var nextSeq int
-	if err := tx.QueryRowContext(ctx,
-		`SELECT COALESCE(MAX(CAST(SUBSTRING(qios_id FROM 6) AS INTEGER)), 0) + 1 FROM businesses`,
-	).Scan(&nextSeq); err != nil {
-		nextSeq = 1
+	if err := tx.QueryRowContext(ctx, `SELECT nextval('qios_id_seq')`).Scan(&nextSeq); err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("admin: generate qios_id: %w", err)
 	}
 	qiosID := fmt.Sprintf("QIOS-%06d", nextSeq)
 
@@ -512,8 +511,8 @@ func (r *PostgresRepository) FindTransactionByID(ctx context.Context, id uuid.UU
 
 func (r *PostgresRepository) VoidTransaction(ctx context.Context, id uuid.UUID) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE pos_orders SET status='cancelled', updated_at=NOW()
-		 WHERE id=$1 AND status='pending'`, id,
+		`UPDATE pos_orders SET status='VOIDED', updated_at=NOW()
+		 WHERE id=$1 AND status='CONFIRMED'`, id,
 	)
 	if err != nil {
 		return fmt.Errorf("admin: void transaction: %w", err)
