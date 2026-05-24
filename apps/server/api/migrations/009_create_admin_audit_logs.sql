@@ -1,4 +1,4 @@
--- 012_create_admin_audit_logs.sql
+-- 009_create_admin_audit_logs.sql
 -- Setiap aksi admin tercatat: suspend user, ubah plan, akses data, dll.
 -- admin_id NULL kalau aksi dilakukan oleh sistem otomatis.
 

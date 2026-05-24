@@ -1,4 +1,4 @@
--- 020_create_consumption_log.sql
+-- 011_create_consumption_log.sql
 -- Log pemakaian bahan baku per transaksi CONFIRMED.
 -- Di-populate otomatis saat kasir konfirmasi order (via transaction service).
 

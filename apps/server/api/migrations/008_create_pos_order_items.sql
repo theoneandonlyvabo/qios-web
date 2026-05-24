@@ -1,4 +1,4 @@
--- 009_create_pos_order_items.sql
+-- 008_create_pos_order_items.sql
 -- Item per order. product_name dan unit_price disimpan sebagai snapshot
 -- supaya data historis tidak berubah kalau produk diedit atau dihapus.
 

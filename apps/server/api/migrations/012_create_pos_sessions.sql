@@ -1,4 +1,4 @@
--- 022_create_pos_sessions.sql
+-- 012_create_pos_sessions.sql
 -- Track sesi aktif operator. Owner bisa lihat siapa yang sedang login
 -- dan force-end session tertentu.
 --

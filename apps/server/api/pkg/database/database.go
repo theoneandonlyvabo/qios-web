@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/config"
@@ -34,6 +35,14 @@ func Connect(cfg *config.Config) *sql.DB {
 	if err := db.Ping(); err != nil {
 		log.Fatalf("failed to reach database: %v", err)
 	}
+
+	lifetime, err := time.ParseDuration(cfg.DBConnMaxLifetime)
+	if err != nil {
+		log.Fatalf("invalid DB_CONN_MAX_LIFETIME: %v", err)
+	}
+	db.SetMaxOpenConns(cfg.DBMaxOpenConns)
+	db.SetMaxIdleConns(cfg.DBMaxIdleConns)
+	db.SetConnMaxLifetime(lifetime)
 
 	log.Println("database connected")
 	return db

@@ -1,4 +1,4 @@
--- 006_create_operators.sql
+-- 005_create_operators.sql
 -- Akun kasir per bisnis. Login via operator_code (di-set owner, unik per bisnis)
 -- atau scan QR (qr_token unik global). Tidak support Google OAuth.
 

@@ -1,4 +1,5 @@
--- Buat sequence untuk QIOS-ID supaya atomic, tidak ada race condition.
+-- 013_create_qios_id_sequence.sql
+-- Sequence untuk QIOS-ID supaya atomic, tidak ada race condition.
 -- Advance ke nilai MAX yang sudah ada supaya tidak konflik dengan data lama.
 
 CREATE SEQUENCE IF NOT EXISTS qios_id_seq
