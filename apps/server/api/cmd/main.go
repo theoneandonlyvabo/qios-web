@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo-contrib/echoprometheus"
@@ -34,6 +36,19 @@ func (cev *echoValidator) Validate(input any) error {
 	return cev.validate.Struct(input)
 }
 
+// metricsGuard hanya izinkan akses dari localhost.
+func metricsGuard() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			ip := c.RealIP()
+			if ip != "127.0.0.1" && ip != "::1" {
+				return echo.ErrForbidden
+			}
+			return next(c)
+		}
+	}
+}
+
 func main() {
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
@@ -47,6 +62,16 @@ func main() {
 		log.Fatalf("migration failed: %v", err)
 	}
 
+	// Bersihkan refresh token yang sudah expired setiap 24 jam.
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			_, _ = db.Exec(`DELETE FROM refresh_tokens WHERE expires_at < NOW()`)
+			_, _ = db.Exec(`DELETE FROM admin_refresh_tokens WHERE expires_at < NOW()`)
+		}
+	}()
+
 	jwtSvc, err := appjwt.NewService(cfg)
 	if err != nil {
 		log.Fatalf("failed to init jwt service: %v", err)
@@ -56,19 +81,28 @@ func main() {
 	e.HideBanner = true
 	e.Validator = &echoValidator{validate: validator.New()}
 
-	e.Use(applogger.Middleware())
-	e.Use(echoprometheus.NewMiddleware("qios"))
-	e.GET("/metrics", echoprometheus.NewHandler())
-	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-	})
+	// Recover harus pertama — tangkap panic dari semua handler termasuk /health.
 	e.Use(echomiddleware.Recover())
+	e.Use(applogger.Middleware())
+	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
+		XSSProtection:         "1; mode=block",
+		ContentTypeNosniff:    "nosniff",
+		XFrameOptions:         "DENY",
+		HSTSMaxAge:            31536000,
+		HSTSExcludeSubdomains: false,
+	}))
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
-		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowOrigins:     strings.Split(cfg.CORSAllowedOrigins, ","),
 		AllowMethods:     []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
+
+	e.Use(echoprometheus.NewMiddleware("qios"))
+	e.GET("/metrics", echoprometheus.NewHandler(), metricsGuard())
+	e.GET("/health", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	})
 
 	authMiddleware := appmiddleware.RequireAuth(jwtSvc)
 

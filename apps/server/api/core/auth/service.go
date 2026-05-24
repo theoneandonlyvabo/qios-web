@@ -185,13 +185,12 @@ func (s *service) issueOperatorToken(op *OperatorLoginData) (*OperatorLoginResul
 	return &OperatorLoginResult{
 		AccessToken: token,
 		Operator: OperatorInfo{
-			ID:           op.ID,
-			BusinessID:   op.BusinessID,
-			Name:         op.Name,
-			OperatorCode: op.OperatorCode,
-			IsActive:     op.IsActive,
-			CreatedAt:    op.CreatedAt,
-			UpdatedAt:    op.UpdatedAt,
+			ID:         op.ID,
+			BusinessID: op.BusinessID,
+			Name:       op.Name,
+			IsActive:   op.IsActive,
+			CreatedAt:  op.CreatedAt,
+			UpdatedAt:  op.UpdatedAt,
 		},
 	}, nil
 }

@@ -149,13 +149,13 @@ func (h *Handler) Logout(c echo.Context) error {
 // ----------------------------------------------------------------
 
 type operatorCredentialsRequest struct {
-	BusinessID   string `json:"business_id"`
-	OperatorCode string `json:"operator_code"`
-	Password     string `json:"password"`
+	BusinessID   string `json:"business_id"   validate:"required,uuid4"`
+	OperatorCode string `json:"operator_code" validate:"required"`
+	Password     string `json:"password"      validate:"required"`
 }
 
 type operatorQRRequest struct {
-	QRToken string `json:"qr_token"`
+	QRToken string `json:"qr_token" validate:"required"`
 }
 
 // OperatorLoginWithCredentials — kasir login via operator_code + password.
@@ -165,7 +165,7 @@ func (h *Handler) OperatorLoginWithCredentials(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return response.BadRequest(c, "invalid request body")
 	}
-	if req.BusinessID == "" || req.OperatorCode == "" || req.Password == "" {
+	if err := c.Validate(&req); err != nil {
 		return response.BadRequest(c, "business_id, operator_code, dan password wajib diisi")
 	}
 	businessID, err := uuid.Parse(req.BusinessID)

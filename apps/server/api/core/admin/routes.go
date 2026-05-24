@@ -4,12 +4,17 @@ package admin
 
 import (
 	"github.com/labstack/echo/v4"
+	echomiddleware "github.com/labstack/echo/v4/middleware"
 	appmiddleware "github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/middleware"
+)
+
+var adminLoginRateLimiter = echomiddleware.RateLimiter(
+	echomiddleware.NewRateLimiterMemoryStore(10),
 )
 
 func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc) {
 	// Public auth routes — tidak butuh JWT
-	e.POST("/admin/auth/login", h.Login)
+	e.POST("/admin/auth/login", h.Login, adminLoginRateLimiter)
 	e.POST("/admin/auth/refresh", h.Refresh)
 	e.POST("/admin/auth/logout", h.Logout)
 

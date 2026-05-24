@@ -1,4 +1,4 @@
--- 021_add_draft_status_to_pos_orders.sql
+-- 021_add_pos_order_draft_status_and_checkout_tracking.sql
 -- Tambah status DRAFT sebagai state awal order (order sedang diisi, belum checkout).
 -- Flow baru: DRAFT → PENDING (checkout dimulai) → CONFIRMED / VOIDED
 --
