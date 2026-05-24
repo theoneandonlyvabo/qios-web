@@ -245,7 +245,7 @@ API collection di-commit ke repo untuk shared testing antar dev. Update saat ada
 
 ### Database — PostgreSQL 16
 
-Dijalankan via Docker. Migration dikelola secara manual menggunakan `migrate.go` berbasis file `.sql` bernomor urut di folder **`infra/database/migrations/`**. Migration bersifat **append-only** — file yang sudah ada tidak boleh diedit.
+Dijalankan via Docker. Migration dikelola secara manual menggunakan `migrate.go` berbasis file `.sql` bernomor urut di folder **`apps/server/api/migrations/`**. Migration bersifat **append-only** setelah production deploy — file yang sudah ada tidak boleh diedit di production.
 
 ### Flow Transaksi (Operator)
 
@@ -319,22 +319,23 @@ Setiap perubahan endpoint **harus diupdate di `docs/qios-api.yml` terlebih dahul
 
 ## Database Schema
 
-Target state v0.4 memerlukan 12 migration files baru. Migration reset dari schema lama (Xendit-era) ke schema v0.4 **belum dilakukan** — file di `infra/database/migrations/` saat ini masih berisi schema lama (includes `xendit_payments`, `webhook_events`, dll dari branch `old-dev-xendit`). Schema v0.4 di bawah adalah **target spec** untuk migration reset yang akan datang. Versi lama di-archive di branch `old-dev-xendit`.
+Migration reset ke schema v0.4 **sudah selesai** — 13 file di `apps/server/api/migrations/`, semua berjenis `CREATE`. Schema lama (Xendit-era) di-archive di branch `old-dev-xendit`.
 
 | File | Tabel | Keterangan |
 |------|-------|------------|
-| 001 | `users` | Owner bisnis. Support email + Google OAuth. Tidak ada self-registration; user di-create oleh admin Skalar via `/admin/businesses`. |
-| 002 | `refresh_tokens` | Multi-device session owner. Hash, bukan plain text. |
-| 003 | `admin_users` | Akun staff Skalar. Role: `admin` atau `super_admin`. |
-| 004 | `admin_refresh_tokens` | Session admin, dipisah dari owner agar JWT scope tidak bercampur. |
-| 005 | `businesses` | Satu bisnis per owner. Menyimpan `qm_id` (format `QM-NNNNNN`), info bisnis, plan, features (JSONB array), max_operators, status (`ACTIVE`/`SUSPENDED`/`CHURNED`), lifecycle timestamps (`onboarded_at`, `suspended_at`, `churned_at`, `last_active_at`), `qris_static_payload`, dan `onboarded_by` (admin_id). |
-| 006 | `operators` | Akun operator per bisnis. Field: `operator_code` (unik per business), `password_hash`, `qr_token` (statis, regenerate via owner), `is_active`. |
-| 007 | `products` | Katalog produk. Field: `name`, `price`, `category`, `description`, `recipe` (JSONB array of ingredients), `is_available`, `total_sold`, soft delete via `deleted_at`. |
-| 008 | `transactions` | Renamed dari `pos_orders`. Status: `PENDING`/`CONFIRMED`/`VOIDED`. Field: `order_id`, `total_amount`, `payment_method` (nullable saat PENDING), `created_by_operator_id`, `confirmed_by_type` + `confirmed_by_id`, `confirmed_at`, `voided_by_type` + `voided_by_id`, `voided_at`, `void_reason`, `note`. |
-| 009 | `transaction_items` | Item per transaksi. Snapshot `product_name` + `unit_price` saat transaksi dibuat. Bukan FK ke produk untuk akurasi historis. |
-| 010 | `consumption_log` | Auto-populated saat transaksi CONFIRMED. Field: `transaction_id`, `transaction_item_id`, `product_id`, `ingredient_name`, `qty`, `unit`, `recorded_at`. Source untuk `/reports/consumption` dan insight. |
-| 011 | `admin_audit_logs` | Audit trail aksi admin. Field: `admin_id`, `action_type`, `resource_type`, `resource_id`, `before_state` (JSONB), `after_state` (JSONB), `reason`, `created_at`. |
-| 012 | `business_status_log` (opsional, post-MVP) | Audit lengkap perubahan status business. Slot disiapkan untuk post-MVP. |
+| 001 | `users` | Owner bisnis. Support email + Google OAuth. Tidak ada self-registration. |
+| 002 | `refresh_tokens` | Multi-device session owner. Disimpan sebagai hash. |
+| 003 | `password_reset_tokens` | Token reset password via email, expire 1 jam. |
+| 004 | `businesses` | Satu bisnis per owner. Field: `qios_id` (format `QIOS-000001`), `qris_string` (nullable), `merchant_status` (`PENDING`/`REGISTERED`/`ACTIVE`/`SUSPENDED`). |
+| 005 | `operators` | Akun kasir per bisnis. `operator_code` unik per-business (partial index), `qr_token` unik global, soft delete via `deleted_at`. |
+| 006 | `products` | Katalog produk. `recipe` (JSONB array of ingredients), `total_sold`, soft delete via `deleted_at`. |
+| 007 | `pos_orders` | Order dari kasir. Status: `DRAFT`/`PENDING`/`CONFIRMED`/`VOIDED` (default `DRAFT`). Field: `order_id`, `payment_method`, `confirmed_at`, `checkout_started_at` (untuk validasi slide-to-confirm ≥800ms). |
+| 008 | `pos_order_items` | Item per order. Snapshot `product_name` + `unit_price` saat order dibuat — akurasi historis terjaga. |
+| 009 | `admin_audit_logs` | Audit trail aksi admin. Field: `admin_id`, `target_type`, `target_id`, `action`, `meta` (JSONB). |
+| 010 | `admin_users` + `admin_refresh_tokens` | Akun staff Skalar dan session token-nya, dipisah dari owner. |
+| 011 | `consumption_log` | Auto-populated saat transaksi CONFIRMED. Source untuk `/reports/consumption` dan insight. |
+| 012 | `pos_sessions` | Track sesi aktif operator. `ended_at` NULL = sesi masih aktif. |
+| 013 | `qios_id_seq` | Sequence untuk generate `qios_id` secara atomic. |
 
 **Aturan penting:**
 
@@ -771,7 +772,7 @@ go run ./cmd/seed
 **Backend (api):**
 1. ✅ Auth endpoints live: owner + operator + admin login, refresh, logout
 2. ✅ Middleware JWT scope per role (RequireAuth, RequireAdmin)
-3. ⏳ Finalisasi migration reset ke schema v0.4 (001-012 baru)
+3. ✅ Finalisasi migration reset ke schema v0.4 (001-013, semua CREATE)
 4. ⏳ Seed data: 1 admin Skalar account, 1 dummy business + owner + operator + 3 produk
 
 **Frontend Dashboard (Dev 1):**

@@ -670,8 +670,9 @@ paths:
       tags: [Transaction]
       summary: Buat order baru (status PENDING)
       description: >
-        Operator atau owner bikin order baru. Method belum di-set, baru
-        di-set saat confirm. Backend hitung total_amount dari items.
+        Operator atau owner bikin order baru. Status awal: DRAFT.
+        Method belum di-set, baru di-set saat confirm.
+        Backend hitung total_amount dari items.
         Snapshot product_name + unit_price ke transaction_items.
       security: [{ BearerAuth: [] }]
       requestBody:
@@ -737,10 +738,10 @@ paths:
       tags: [Transaction]
       summary: Konfirmasi transaksi (PENDING -> CONFIRMED)
       description: >
-        Trigger oleh slide-to-confirm gesture di app operator (FE handle 800ms
-        threshold). Body wajib `payment_method`. Backend stamp
-        confirmed_at + confirmed_by (operator_id dari JWT atau null kalo
-        owner langsung).
+        Trigger oleh slide-to-confirm gesture di app operator (FE handle ≥800ms
+        threshold; server validasi checkout_started_at). Body wajib `payment_method`.
+        Bisa dari status DRAFT atau PENDING. Backend stamp confirmed_at +
+        confirmed_by (operator_id dari JWT atau null kalau owner langsung).
         Sekaligus trigger background: consumption_log entry dari
         product.recipe untuk tiap item.
       security: [{ BearerAuth: [] }]
@@ -1759,7 +1760,12 @@ components:
 
     TransactionStatus:
       type: string
-      enum: [PENDING, CONFIRMED, VOIDED]
+      enum: [DRAFT, PENDING, CONFIRMED, VOIDED]
+      description: >
+        DRAFT = order sedang diisi operator (default saat create).
+        PENDING = checkout dimulai, checkout_started_at di-stamp.
+        CONFIRMED = pembayaran dikonfirmasi via slide-to-confirm.
+        VOIDED = dibatalkan.
 
     PaymentMethod:
       type: string
