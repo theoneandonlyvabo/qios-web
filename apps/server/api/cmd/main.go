@@ -92,6 +92,11 @@ func main() {
 
 	// Recover harus pertama — tangkap panic dari semua handler termasuk /health.
 	e.Use(echomiddleware.Recover())
+	e.Use(echomiddleware.BodyLimit("2M"))
+	e.Use(echomiddleware.TimeoutWithConfig(echomiddleware.TimeoutConfig{
+		Timeout: 30 * time.Second,
+	}))
+	e.IPExtractor = echo.ExtractIPFromXFFHeader()
 	e.Use(applogger.Middleware())
 	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
 		XSSProtection:         "1; mode=block",
@@ -109,15 +114,17 @@ func main() {
 
 	e.Use(echoprometheus.NewMiddleware("qios"))
 	e.GET("/metrics", echoprometheus.NewHandler(), metricsGuard())
-	e.GET("/health", func(c echo.Context) error {
-		if err := db.Ping(); err != nil {
-			return c.JSON(http.StatusServiceUnavailable, map[string]string{
-				"status": "unhealthy",
-				"error":  "database unreachable",
-			})
-		}
+	e.GET("/livez", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
+	readyz := func(c echo.Context) error {
+		if err := db.PingContext(c.Request().Context()); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "db_unreachable"})
+		}
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	}
+	e.GET("/readyz", readyz)
+	e.GET("/health", readyz) // alias for /readyz — remove once infra confirms unused
 
 	authMiddleware := appmiddleware.RequireAuth(jwtSvc)
 

@@ -8,7 +8,7 @@ import (
 )
 
 func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc) {
-	g := e.Group("/transactions", authMiddleware)
+	g := e.Group("/transactions", authMiddleware, appmiddleware.RateLimitOwner)
 
 	// Owner-only: list semua transaksi dengan filter + pagination
 	g.GET("", h.List, appmiddleware.RequireOwner)

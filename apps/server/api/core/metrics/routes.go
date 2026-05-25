@@ -8,7 +8,7 @@ import (
 )
 
 func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc) {
-	g := e.Group("/metrics", authMiddleware, appmiddleware.RequireOwner)
+	g := e.Group("/metrics", authMiddleware, appmiddleware.RequireOwner, appmiddleware.RateLimitOwner)
 
 	g.GET("/summary", h.Summary)
 	g.GET("/trend", h.Trend)
