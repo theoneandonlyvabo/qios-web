@@ -17,13 +17,10 @@ import (
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/config"
 	adminpkg "github.com/theoneandonlyvabo/qios-web/apps/server/api/core/admin"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/analytics"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/auth"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/dashboard"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/insight"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/metrics"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/order"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/product"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/report"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/transaction"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/user"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/database"
@@ -145,10 +142,7 @@ func main() {
 	transactionSvc := transaction.NewService(transactionRepo)
 	transaction.RegisterRoutes(e, transaction.NewHandler(transactionSvc), authMiddleware)
 
-	dashboard.RegisterRoutes(e, dashboard.NewHandler(dashboard.NewQueries(db)), authMiddleware)
-	analytics.RegisterRoutes(e, db, authMiddleware)
-	report.RegisterRoutes(e, db, authMiddleware)
-	insight.RegisterRoutes(e, db, authMiddleware)
+	metrics.RegisterRoutes(e, metrics.NewHandler(metrics.NewQueries(db)), authMiddleware)
 
 	adminRepo := adminpkg.NewPostgresRepository(db)
 	adminSvc := adminpkg.NewService(adminRepo, jwtSvc)

@@ -1,39 +1,24 @@
-// core/report/handler.go
+// core/metrics/handler_report.go
+//
+// Handler untuk DailySales, MonthlySales, Consumption, Export (dari report).
+// Endpoint: GET /metrics/reports/daily-sales, /metrics/reports/monthly-sales,
+//           GET /metrics/reports/consumption, POST /metrics/reports/export
 
-package report
+package metrics
 
 import (
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/response"
 )
 
-type Handler struct {
-	q *Queries
-}
-
-func NewHandler(q *Queries) *Handler {
-	return &Handler{q: q}
-}
-
-func businessIDFromCtx(c echo.Context) (uuid.UUID, error) {
-	raw, _ := c.Get("business_id").(string)
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil, errors.New("business_id tidak valid di token")
-	}
-	return id, nil
-}
-
-// GET /reports/daily-sales?date=YYYY-MM-DD
+// GET /metrics/reports/daily-sales?date=YYYY-MM-DD
 func (h *Handler) DailySales(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -56,7 +41,7 @@ func (h *Handler) DailySales(c echo.Context) error {
 	return response.OK(c, rep)
 }
 
-// GET /reports/monthly-sales?month=YYYY-MM
+// GET /metrics/reports/monthly-sales?month=YYYY-MM
 func (h *Handler) MonthlySales(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -79,7 +64,7 @@ func (h *Handler) MonthlySales(c echo.Context) error {
 	return response.OK(c, rep)
 }
 
-// GET /reports/consumption?start_date=&end_date=&ingredient=
+// GET /metrics/reports/consumption?start_date=&end_date=
 // MVP: returns empty entries — consumption_log belum diimplementasi.
 func (h *Handler) Consumption(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
@@ -108,8 +93,8 @@ func (h *Handler) Consumption(c echo.Context) error {
 	return response.OK(c, rep)
 }
 
-// POST /reports/export
-// Streams CSV untuk daily_sales atau monthly_sales. PDF belum didukung.
+// POST /metrics/reports/export
+// Streams CSV untuk daily_sales atau monthly_sales.
 func (h *Handler) Export(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
