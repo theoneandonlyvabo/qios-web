@@ -374,40 +374,8 @@ func NewPostgresPlanLookup(db *sql.DB) *PostgresPlanLookup {
 
 const defaultMaxOperators = 3
 
-func (p *PostgresPlanLookup) MaxOperators(ctx context.Context, businessID uuid.UUID) (int, error) {
-	var maxOps sql.NullInt64
-	err := p.db.QueryRowContext(ctx,
-		`SELECT pl.max_operators
-		 FROM businesses b
-		 JOIN subscriptions s ON s.user_id = b.user_id
-		 JOIN plans pl        ON pl.id     = s.plan_id
-		 WHERE b.id = $1
-		   AND s.status = 'active'
-		   AND (s.expires_at IS NULL OR s.expires_at > NOW())
-		 ORDER BY s.started_at DESC
-		 LIMIT 1`,
-		businessID,
-	).Scan(&maxOps)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return defaultMaxOperators, nil
-	}
-	if err != nil {
-		if isUndefinedTable(err) {
-			return defaultMaxOperators, nil
-		}
-		return 0, fmt.Errorf("user: plan lookup: %w", err)
-	}
-	if !maxOps.Valid {
-		return defaultMaxOperators, nil
-	}
-	return int(maxOps.Int64), nil
-}
-
-func isUndefinedTable(err error) bool {
-	var pqErr *pq.Error
-	if errors.As(err, &pqErr) {
-		return pqErr.Code == "42P01"
-	}
-	return strings.Contains(err.Error(), "does not exist")
+func (p *PostgresPlanLookup) MaxOperators(_ context.Context, _ uuid.UUID) (int, error) {
+	// Subscription/plan tables not yet created. Restore the JOIN query once
+	// 015_create_subscriptions_and_plans.sql is applied.
+	return defaultMaxOperators, nil
 }
