@@ -4,10 +4,13 @@
 > Baca ini sebelum menyentuh satu baris kode pun. Jika ada konflik antara dokumen
 > ini dengan kode yang ada, dokumen ini yang benar — kodenya yang perlu diperbaiki.
 
-> Versi: 0.4 (post-pivot Mei 2026). Major changes dari versi sebelumnya:
-> Xendit di-drop, full in-house transaction management. Recipe nested di product.
-> Client di-split (dashboard / operator / admin). Plan + features merged ke business.
-> Tidak ada self-serve registration; onboarding offline-first via admin Skalar.
+> Versi: 0.5 (post domain restructure Mei 2026). Major changes dari versi sebelumnya:
+> Domain `pos/` diubah namanya ke `order/`. Empat domain view (dashboard/analytics/report/insight)
+> dikonsolidasi ke domain tunggal `metrics/`. Tabel DB: pos_orders→orders, pos_order_items→order_items,
+> pos_sessions→order_sessions. Bug status='paid' di dashboard/report di-fix ke 'CONFIRMED'.
+> Request hardening: BodyLimit 2M, Timeout 30s, IPExtractor XFF, per-scope rate limiting.
+> Endpoint metrics di-rename dari /dashboard/* /analytics/* /reports/* /insight ke /metrics/*.
+> OpenAPI contract: v0.5.0.
 
 ---
 
@@ -190,12 +193,10 @@ apps/server/api/
 │   ├── auth/               # owner login, Google OAuth, refresh, logout + operator login/QR
 │   ├── user/               # profil owner + business info + operator CRUD (owner-side)
 │   ├── product/            # read-only owner endpoint
-│   ├── pos/                # orchestrator order kasir: cart, DRAFT→CONFIRMED flow, slide-to-confirm, sessions
+│   ├── order/              # orchestrator order kasir: cart, DRAFT→CONFIRMED flow, slide-to-confirm, sessions
 │   ├── transaction/        # read-only log: owner history + filter
-│   ├── dashboard/          # view: summary, trend, peak hours, top products
-│   ├── analytics/          # view: deeper dive dengan custom timeframe + comparison
-│   ├── report/             # view: daily/monthly sales, consumption, export
-│   ├── insight/            # view: rule-based insight cards, AI-ready schema
+│   ├── metrics/            # view: summary, trend, peak hours, top products, overview,
+│   │                       #        daily/monthly sales, consumption, export, insight
 │   └── admin/              # admin panel: onboard merchant, CRUD product+recipe,
 │                           #              manage plan/features, audit, override void
 └── pkg/                    # shared utilities
@@ -207,15 +208,15 @@ apps/server/api/
     └── encryption/         # AES-256 untuk data sensitif (placeholder)
 ```
 
-> **Implementasi saat ini:** Domain `business/` di-merge ke dalam `user/` domain (owner satu bisnis). Domain `consumption/` di-handle sebagai background goroutine di dalam `pos/` domain saat CONFIRMED. Actual folder: `auth`, `user`, `product`, `pos`, `transaction`, `dashboard`, `analytics`, `report`, `insight`, `admin`.
+> **Implementasi saat ini:** Domain `business/` di-merge ke dalam `user/` domain (owner satu bisnis). Domain `consumption/` di-handle sebagai background goroutine di dalam `order/` domain saat CONFIRMED. Actual folder: `auth`, `user`, `product`, `order`, `transaction`, `metrics`, `admin`.
 
 **Konvensi domain:**
 
 - Setiap domain di `core/` mengikuti pola `handler.go` → `service.go` → `repository.go`
 - Handler tidak boleh menyentuh database langsung — semua lewat service dan repository
 - Pattern canonical ada di `apps/server/api/AGENTS.md` — `core/user/` dijadikan referensi
-- Domain bisnis (`auth`, `user`, `product`, `pos`, `transaction`, dst) punya tabel sendiri
-- Domain view (`dashboard`, `analytics`, `report`, `insight`) tidak punya tabel — service inject repository dari beberapa domain bisnis untuk aggregation
+- Domain bisnis (`auth`, `user`, `product`, `order`, `transaction`, dst) punya tabel sendiri
+- Domain view (`metrics`) tidak punya tabel — queries inject `*sql.DB` langsung untuk aggregation
 - Dependency direction: view → bisnis. Bisnis tidak boleh depend on view.
 
 ### Server — AI Service
@@ -252,14 +253,14 @@ Dijalankan via Docker. Migration dikelola secara manual menggunakan `migrate.go`
 ```
 1. Operator buka PWA, login via QR atau credential
 2. Operator pilih produk dari katalog, set quantity
-3. POST /transactions
+3. POST /orders
    - Server generate order_id format: QM-NNNNNN-YYYYMMDD-{hex4}
-   - INSERT transactions (status: PENDING, payment_method: null)
-   - Snapshot product_name + unit_price ke transaction_items
-   - Return transaction detail ke operator
+   - INSERT orders (status: PENDING, payment_method: null)
+   - Snapshot product_name + unit_price ke order_items
+   - Return order detail ke operator
 4. Pembeli bayar (cash / scan QRIS static merchant / transfer)
 5. Operator pilih payment method di PWA, slide-to-confirm (FE enforce ≥800ms hold)
-6. POST /transactions/{id}/confirm body {payment_method}
+6. POST /orders/{id}/checkout/confirm body {payment_method}
    - Server set status: CONFIRMED, payment_method, confirmed_at, confirmed_by
    - Background job: parse product.recipe untuk tiap item, INSERT consumption_log
    - Update last_active_at di business
@@ -278,7 +279,7 @@ Dijalankan via Docker. Migration dikelola secara manual menggunakan `migrate.go`
 
 ## API Contract
 
-Kontrak lengkap ada di `docs/qios-api.yml` (OpenAPI 3.0.3, v0.4).
+Kontrak lengkap ada di `docs/qios-api.yml` (OpenAPI 3.0.3, v0.5).
 
 **Aturan:**
 
@@ -302,11 +303,11 @@ Kontrak lengkap ada di `docs/qios-api.yml` (OpenAPI 3.0.3, v0.4).
 | Operator (owner-side) | `/business/operators` (CRUD owner) | Owner manage operator. Cap = `business.max_operators` |
 | Operator Auth | `/operator/auth/login`, `/operator/auth/login/qr`, `/operator/me` | Public, untuk PWA operator |
 | Product | `/products` (GET only) | Owner read-only. CRUD via admin domain. |
-| Transaction | `/transactions` (POST, GET), `/transactions/{id}/confirm`, `/transactions/{id}/void` | Flow PENDING → CONFIRMED → VOIDED |
-| Dashboard | `/dashboard/summary`, `/dashboard/transactions/trend`, `/dashboard/products/top`, `/dashboard/transactions/peak-hours` | Quick view aggregate |
-| Analytics | `/analytics/overview` | Custom timeframe + period comparison |
-| Report | `/reports/daily-sales`, `/reports/monthly-sales`, `/reports/consumption`, `/reports/export` | Laporan + export PDF/CSV |
-| Insight | `/insight` | Rule-based MVP, AI-ready schema |
+| Order | `/orders` (POST, GET), `/orders/{id}/items`, `/orders/{id}/checkout/begin`, `/orders/{id}/checkout/confirm`, `/orders/{id}/void` | Flow DRAFT → CONFIRMED → VOIDED. Session: `/orders/sessions` (GET, DELETE) |
+| Transaction | `/transactions` (GET), `/transactions/{id}` (GET) | Read-only history. Owner + operator. |
+| Metrics | `/metrics/summary`, `/metrics/trend`, `/metrics/top-products`, `/metrics/peak-hours`, `/metrics/overview` | Aggregate + analytics. Owner-only. |
+| Metrics Reports | `/metrics/reports/daily-sales`, `/metrics/reports/monthly-sales`, `/metrics/reports/consumption`, `/metrics/reports/export` | Laporan + export CSV. Owner-only. |
+| Metrics Insight | `/metrics/insight` | Rule-based MVP, AI-ready schema. Owner-only. |
 | Admin Auth | `/admin/auth/login`, `/admin/auth/refresh`, `/admin/auth/logout`, `/admin/me` | Surface terpisah |
 | Admin Business | `/admin/businesses` (CRUD onboard), `/admin/businesses/{id}` | Onboard merchant + manage plan/features/status |
 | Admin Product | `/admin/businesses/{id}/products`, `/admin/products/{id}` | Full CRUD product + recipe |
@@ -329,12 +330,12 @@ Migration reset ke schema v0.4 **sudah selesai** — 13 file di `apps/server/api
 | 004 | `businesses` | Satu bisnis per owner. Field: `qios_id` (format `QIOS-000001`), `qris_string` (nullable), `merchant_status` (`PENDING`/`REGISTERED`/`ACTIVE`/`SUSPENDED`). |
 | 005 | `operators` | Akun kasir per bisnis. `operator_code` unik per-business (partial index), `qr_token` unik global, soft delete via `deleted_at`. |
 | 006 | `products` | Katalog produk. `recipe` (JSONB array of ingredients), `total_sold`, soft delete via `deleted_at`. |
-| 007 | `pos_orders` | Order dari kasir. Status: `DRAFT`/`PENDING`/`CONFIRMED`/`VOIDED` (default `DRAFT`). Field: `order_id`, `payment_method`, `confirmed_at`, `checkout_started_at` (untuk validasi slide-to-confirm ≥800ms). |
-| 008 | `pos_order_items` | Item per order. Snapshot `product_name` + `unit_price` saat order dibuat — akurasi historis terjaga. |
+| 007 | `orders` (renamed dari `pos_orders` via migration 014) | Order dari kasir. Status: `DRAFT`/`PENDING`/`CONFIRMED`/`VOIDED` (default `DRAFT`). Field: `order_id`, `payment_method`, `confirmed_at`, `checkout_started_at` (untuk validasi slide-to-confirm ≥800ms). |
+| 008 | `order_items` (renamed dari `pos_order_items`; FK column `order_id` renamed dari `pos_order_id`) | Item per order. Snapshot `product_name` + `unit_price` saat order dibuat — akurasi historis terjaga. |
 | 009 | `admin_audit_logs` | Audit trail aksi admin. Field: `admin_id`, `target_type`, `target_id`, `action`, `meta` (JSONB). |
 | 010 | `admin_users` + `admin_refresh_tokens` | Akun staff Skalar dan session token-nya, dipisah dari owner. |
 | 011 | `consumption_log` | Auto-populated saat transaksi CONFIRMED. Source untuk `/reports/consumption` dan insight. |
-| 012 | `pos_sessions` | Track sesi aktif operator. `ended_at` NULL = sesi masih aktif. |
+| 012 | `order_sessions` (renamed dari `pos_sessions`) | Track sesi aktif operator. `ended_at` NULL = sesi masih aktif. |
 | 013 | `qios_id_seq` | Sequence untuk generate `qios_id` secara atomic. |
 
 **Aturan penting:**
@@ -405,23 +406,23 @@ Lifecycle `status`: `ACTIVE` (default saat onboard) → `SUSPENDED` (admin set, 
 
 | ID | User Story | Requirement |
 |----|------------|-------------|
-| C-13 | Lihat produk terlaris dalam periode tertentu | `GET /dashboard/products/top` dengan filter period dan limit. |
-| C-14 | Lihat tren transaksi harian dalam rentang waktu custom | `GET /dashboard/transactions/trend` dengan `start_date` dan `end_date`. |
-| C-15 | Bandingkan performa dengan periode sebelumnya | `GET /analytics/overview` dengan `compare_with` query param. |
+| C-13 | Lihat produk terlaris dalam periode tertentu | `GET /metrics/top-products` dengan filter period dan limit. |
+| C-14 | Lihat tren transaksi harian dalam rentang waktu custom | `GET /metrics/trend` dengan `start_date` dan `end_date`. |
+| C-15 | Bandingkan performa dengan periode sebelumnya | `GET /metrics/overview` dengan `compare_with` query param. |
 
 #### Reports & Consumption
 
 | ID | User Story | Requirement |
 |----|------------|-------------|
-| C-16 | Owner bisa lihat laporan harian dan bulanan | `GET /reports/daily-sales`, `GET /reports/monthly-sales` dengan breakdown per payment method dan per produk. |
-| C-17 | Owner tahu berapa banyak bahan baku yang terpakai per periode | `GET /reports/consumption` dengan filter `start_date`, `end_date`, opsional `ingredient`. |
-| C-18 | Owner bisa download laporan ke PDF atau CSV | `POST /reports/export` body `{type, format, period}`. Return download URL temporary. |
+| C-16 | Owner bisa lihat laporan harian dan bulanan | `GET /metrics/reports/daily-sales`, `GET /metrics/reports/monthly-sales` dengan breakdown per payment method dan per produk. |
+| C-17 | Owner tahu berapa banyak bahan baku yang terpakai per periode | `GET /metrics/reports/consumption` dengan filter `start_date`, `end_date`, opsional `ingredient`. |
+| C-18 | Owner bisa download laporan ke PDF atau CSV | `POST /metrics/reports/export` body `{type, format, period}`. Return download URL temporary. |
 
 #### AI Analytics
 
 | ID | User Story | Requirement |
 |----|------------|-------------|
-| C-19 | Dapat insight otomatis dari data bisnis | `GET /insight` mengembalikan insight cards rule-based — MVP minimal 4-6 tipe insight termasuk consumption-based. |
+| C-19 | Dapat insight otomatis dari data bisnis | `GET /metrics/insight` mengembalikan insight cards rule-based — MVP minimal 4-6 tipe insight termasuk consumption-based. |
 | C-20 | Insight bisa di-expand untuk lihat data pendukung | Setiap insight card punya tombol "Lihat Data" yang expand ke breakdown relevan. |
 | C-21 | Schema insight siap untuk AI engine post-MVP | Response include `model_version`, `confidence_score` (nullable di MVP). |
 
@@ -438,9 +439,9 @@ Lifecycle `status`: `ACTIVE` (default saat onboard) → `SUSPENDED` (admin set, 
 | ID | User Story | Requirement |
 |----|------------|-------------|
 | K-01 | Operator login cepat dengan QR atau credential | `POST /operator/auth/login/qr` (primary), `POST /operator/auth/login` (fallback). |
-| K-02 | Operator catat order baru | `POST /transactions` create status PENDING dengan items snapshot. |
-| K-03 | Operator pilih payment method dan konfirmasi | Slide-to-confirm gesture ≥800ms di FE sebelum hit `POST /transactions/{id}/confirm`. |
-| K-04 | Operator bisa batalin order PENDING yang dia bikin sendiri | `POST /transactions/{id}/void`, restricted ke `created_by_operator_id` match. |
+| K-02 | Operator catat order baru | `POST /orders` create status PENDING dengan items snapshot. |
+| K-03 | Operator pilih payment method dan konfirmasi | Slide-to-confirm gesture ≥800ms di FE sebelum hit `POST /orders/{id}/checkout/confirm`. |
+| K-04 | Operator bisa batalin order PENDING yang dia bikin sendiri | `POST /orders/{id}/void`, restricted ke `created_by_operator_id` match. |
 | K-05 | Operator lihat riwayat transaksi hari ini | `GET /operator/transactions/today` (filter via JWT operator_id). |
 
 ### Administrator (Skalar Staff)
@@ -500,7 +501,7 @@ Snapshot kondisi bisnis. Tujuan: kasih owner gambaran kondisi bisnis hari ini da
 - List: Top 5 produk terlaris
 
 **Teknikal:**
-- Endpoints: `/dashboard/summary`, `/dashboard/transactions/trend`, `/dashboard/transactions/peak-hours`, `/dashboard/products/top?limit=5`
+- Endpoints: `/metrics/summary`, `/metrics/trend`, `/metrics/peak-hours`, `/metrics/top-products?limit=5`
 - Chart library: Recharts
 - Timeframe filter: toggle "Hari Ini / 7 Hari" di header
 
@@ -514,7 +515,7 @@ Deep dive performa produk dan tren transaksi.
 - Section 2 — Produk Terlaris: Tabel nama, jumlah terjual, kontribusi revenue (sortable)
 - Section 3 — Perbandingan Periode: Toggle bandingkan dengan periode sebelumnya
 
-**Teknikal:** `/analytics/overview`, `/dashboard/products/top`
+**Teknikal:** `/metrics/overview`, `/metrics/top-products`
 
 #### AI Analytics
 
@@ -534,8 +535,8 @@ QIOS ngomong duluan berdasarkan data bisnis owner. Insight otomatis, bukan chatb
 - "Waktu puncak transaksi 12.00–14.00 berkontribusi 41% dari total transaksi harian."
 
 **Teknikal:**
-- Endpoint: `/insight`
-- MVP: rule-based logic di `core/insight/`, bukan LLM
+- Endpoint: `/metrics/insight`
+- MVP: rule-based logic di `core/metrics/`, bukan LLM
 - Schema sudah include `model_version` dan `confidence_score` untuk forward compatibility ke AI engine post-MVP
 - State: loading skeleton per card, empty state ("Insight akan muncul setelah 7 hari transaksi")
 
@@ -554,7 +555,7 @@ Laporan structured untuk owner, exportable ke PDF atau CSV.
 - Tabel detail breakdown
 - Tombol Export: pilih format PDF atau CSV
 
-**Teknikal:** `/reports/daily-sales`, `/reports/monthly-sales`, `/reports/consumption`, `/reports/export`
+**Teknikal:** `/metrics/reports/daily-sales`, `/metrics/reports/monthly-sales`, `/metrics/reports/consumption`, `/metrics/reports/export`
 
 #### History
 
@@ -614,7 +615,7 @@ CRUD akun operator milik bisnis.
 - List produk dengan tombol qty (+/-)
 - Cart sticky di bawah: total amount, jumlah item, tombol "Lanjut ke Konfirmasi"
 
-**Teknikal:** `/products` (GET dengan filter `is_available=true`), `/transactions` (POST saat lanjut ke konfirmasi)
+**Teknikal:** `/products` (GET dengan filter `is_available=true`), `/orders` (POST saat lanjut ke konfirmasi)
 
 #### Confirm
 
@@ -627,7 +628,7 @@ CRUD akun operator milik bisnis.
 - **Slide-to-confirm button** (FE handle threshold ≥800ms hold)
 - Setelah konfirmasi: transaksi CONFIRMED, kembali ke `/order` dengan toast sukses
 
-**Teknikal:** `/transactions/{id}/confirm` dengan body `{payment_method, note}`
+**Teknikal:** `/orders/{id}/checkout/confirm` dengan body `{payment_method, note}`
 
 #### Riwayat Hari Ini
 
@@ -932,9 +933,9 @@ refactor: split dashboard service from analytics service
 - Tidak ada logic bisnis di handler — handler hanya terima request, panggil service, kembalikan response
 - Error selalu di-wrap dengan konteks: `fmt.Errorf("auth: failed to find user: %w", err)`
 - Semua response menggunakan helper dari `pkg/response/`
-- Tidak ada raw SQL di luar layer repository
-- Domain view (`dashboard`, `analytics`, `report`, `insight`) inject repository dari domain bisnis — tidak punya repository sendiri
-- Dependency direction: view → bisnis. Pelanggaran direction = code review reject.
+- Tidak ada raw SQL di luar layer repository (kecuali `core/metrics/queries.go` yang inject `*sql.DB` langsung — tidak punya repository karena pure aggregation)
+- Domain view (`metrics`) tidak punya service/repository layer sendiri — queries inject `*sql.DB`
+- Dependency direction: view → bisnis. Bisnis tidak boleh depend on view.
 
 ### TypeScript (client)
 
@@ -964,6 +965,9 @@ refactor: split dashboard service from analytics service
 
 ## Yang Belum Final (Pending)
 
+- **Subscription model:** `PlanLookup.MaxOperators` di-hardcode ke 3. Query DB diganti dengan `return defaultMaxOperators, nil`. Restore JOIN query ke tabel subscriptions setelah migration `015_create_subscriptions_and_plans.sql` diterapkan.
+- **Insight handler placement:** Handler `/metrics/insight` saat ini query DB langsung (rule-based MVP). Post-MVP, ketika `apps/server/ai/` live, handler ini akan di-refactor menjadi HTTP client ke internal AI service endpoint — bukan DB query. Placement di `metrics/` bersifat transitional; mungkin dipindah ke domain sendiri tergantung shape AI service.
+- **Rate limit values:** Nilai rate limit (`RateLimitOwner` 100/min, `RateLimitOperator` 60/min, `RateLimitAdmin` 200/min) di-hardcode sebagai package-level constants di `pkg/middleware/ratelimit.go`. Move ke env vars (`RATE_LIMIT_OWNER_RPM`, dll.) post-MVP setelah traffic pattern production terobservasi.
 - **Halaman test:** Sebelum production deploy, hapus semua halaman mock data testing yang tidak di-guard middleware
 - **Plan & features detail:** Daftar feature flag spesifik per plan masih placeholder. Board konfirmasi mapping plan ↔ features.
 - **Payment gateway integration (post-MVP):** DOKU dipertimbangkan untuk QRIS dinamis, masih belum fix vendor-nya. Arsitektur in-house transaction sekarang menyiapkan extension point.
@@ -977,9 +981,36 @@ refactor: split dashboard service from analytics service
 
 ---
 
+## Changelog
+
+### v0.5 — Domain Restructure (Mei 2026)
+
+- **Domain rename:** `core/pos/` → `core/order/`. Package, struct, dan import path diupdate.
+- **Endpoint rename (order domain):** `/pos/orders/*` → `/orders/*`, `/pos/sessions` → `/orders/sessions`.
+- **Domain consolidation:** Empat domain view (`dashboard`, `analytics`, `report`, `insight`) dikonsolidasi ke `core/metrics/`. Code duplikasi dihapus. Type `DailyTrend`, `TopProduct`, helper `businessIDFromCtx` dan `periodRange` di-deduplikasi.
+- **Bug fix (silent zero data):** `dashboard` dan `report` query menggunakan `status = 'paid'` yang tidak valid. Dinormalisasi ke `status = 'CONFIRMED'` (sesuai `analytics` dan migration 007). Semua endpoint metrics kini return data yang benar.
+- **Endpoint rename (metrics domain):** `/dashboard/*`, `/analytics/*`, `/reports/*`, `/insight` → `/metrics/*`, `/metrics/reports/*`, `/metrics/insight`.
+- **Table rename (migration 014, file only):** `pos_orders` → `orders`, `pos_order_items` → `order_items`, `pos_sessions` → `order_sessions`, FK column `pos_order_id` → `order_id`.
+- **Request hardening:** BodyLimit 2M, Timeout 30s, IPExtractor XFF di global middleware.
+- **Health endpoints:** `/health` (alias lama) + `/livez` (liveness) + `/readyz` (readiness dengan DB ping).
+- **Rate limiting:** Per-scope rate limiter keyed by `user_id` — Owner 100/min, Operator 60/min, Admin 200/min. Applied di semua domain route groups.
+- **OpenAPI contract:** Versi naik ke v0.5.0. Paths dan tags diupdate.
+
+### v0.4 — In-House Transaction + Admin Surface (Mei 2026)
+
+- Xendit di-drop, full in-house transaction management
+- Transaction status flow: PENDING → CONFIRMED → VOIDED
+- Recipe nested di product (structured JSON, ingredients[])
+- Admin domain: onboard merchant, CRUD product+recipe, manage plan/features/status
+- Plan + features merged ke business (no separate Plans/Subs tables)
+- No public registration; onboarding offline-first via admin Skalar
+
+---
+
 ## Dokumen Terkait
 
-- `docs/qios-api.yml` — OpenAPI 3.0.3 contract lengkap v0.4
+- `docs/qios-api.yml` — OpenAPI 3.0.3 contract lengkap v0.5
+- `docs/MIGRATION_v0.5.md` — panduan migrasi endpoint + tabel untuk FE team dan infra
 - `AGENTS.md` (root) — panduan umum untuk AI agents
 - `apps/server/api/AGENTS.md` — panduan implementasi spesifik api server
 - `apps/client/dashboard/AGENTS.md` — panduan implementasi dashboard (kalau dibuat)

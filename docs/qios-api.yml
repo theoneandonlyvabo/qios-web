@@ -1,7 +1,17 @@
 openapi: 3.0.3
 
 # ============================================================
-# QIOS API CONTRACT v0.4
+# QIOS API CONTRACT v0.5
+# ============================================================
+# Major changes from v0.4:
+#  - Order domain: /pos/orders/* renamed to /orders/*, /pos/sessions -> /orders/sessions
+#  - Metrics domain: /dashboard/*, /analytics/*, /reports/*, /insight -> /metrics/*
+#  - Bug fix: dashboard/report queries used status='paid' (invalid). Fixed to 'CONFIRMED'.
+#  - Tags: Dashboard/Analytics/Report/Insight merged into Metrics; POS tag renamed to Order.
+#  - Table renames in migration 014: pos_orders->orders, pos_order_items->order_items,
+#    pos_sessions->order_sessions, FK column pos_order_id->order_id.
+#  - Request hardening: BodyLimit 2M, Timeout 30s, IPExtractor XFF.
+#  - Rate limiting: per-scope per user_id (Owner 100/min, Operator 60/min, Admin 200/min).
 # ============================================================
 # Major changes from v0.3:
 #  - Xendit DROPPED. Full in-house transaction management.
@@ -26,7 +36,7 @@ info:
     QIOS adalah business intelligence layer untuk UMKM dengan in-house
     transaction management. Tiga role utama: owner (akses dashboard),
     operator (akses PWA operator), dan admin (staff Skalar, akses admin panel).
-  version: 0.4.0
+  version: 0.5.0
   contact:
     name: QIOS Development Team
 
@@ -826,12 +836,12 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
 
   # ==========================================================
-  # DASHBOARD (OWNER QUICK SUMMARY)
+  # METRICS (OWNER ANALYTICS — SUMMARY, REPORTS, INSIGHT)
   # ==========================================================
 
-  /dashboard/summary:
+  /metrics/summary:
     get:
-      tags: [Dashboard]
+      tags: [Metrics]
       summary: Ringkasan performa business
       description: Aggregate untuk dashboard. Count hanya status CONFIRMED.
       security: [{ BearerAuth: [] }]
@@ -853,9 +863,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
-  /dashboard/transactions/trend:
+  /metrics/trend:
     get:
-      tags: [Dashboard]
+      tags: [Metrics]
       summary: Tren transaksi harian
       security: [{ BearerAuth: [] }]
       parameters:
@@ -877,9 +887,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
-  /dashboard/products/top:
+  /metrics/top-products:
     get:
-      tags: [Dashboard]
+      tags: [Metrics]
       summary: Produk terlaris
       security: [{ BearerAuth: [] }]
       parameters:
@@ -903,9 +913,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
-  /dashboard/transactions/peak-hours:
+  /metrics/peak-hours:
     get:
-      tags: [Dashboard]
+      tags: [Metrics]
       summary: Distribusi jam tersibuk
       security: [{ BearerAuth: [] }]
       parameters:
@@ -928,13 +938,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
-  # ==========================================================
-  # ANALYTICS (DEEPER DIVE, CUSTOM TIMEFRAME)
-  # ==========================================================
-
-  /analytics/overview:
+  /metrics/overview:
     get:
-      tags: [Analytics]
+      tags: [Metrics]
       summary: Analytics overview untuk custom date range
       description: Dipakai di page Analytics, mendukung custom timeframe dan period comparison.
       security: [{ BearerAuth: [] }]
@@ -958,18 +964,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
-  # ==========================================================
-  # REPORT (RAW AGGREGATE + EXPORT)
-  # ==========================================================
-  # Domain report = laporan structured untuk owner.
-  # Beda dengan dashboard (snapshot) dan analytics (deep dive interaktif).
-  # Bisa di-export ke PDF atau CSV.
-  # Auto-forward ke WA/Telegram = add-on, post-MVP, gated by features flag.
-  # ==========================================================
-
-  /reports/daily-sales:
+  /metrics/reports/daily-sales:
     get:
-      tags: [Report]
+      tags: [Metrics]
       summary: Laporan penjualan harian
       description: Aggregate transaksi CONFIRMED per hari pada tanggal tertentu.
       security: [{ BearerAuth: [] }]
@@ -989,9 +986,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
-  /reports/monthly-sales:
+  /metrics/reports/monthly-sales:
     get:
-      tags: [Report]
+      tags: [Metrics]
       summary: Laporan penjualan bulanan
       security: [{ BearerAuth: [] }]
       parameters:
@@ -1010,9 +1007,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
-  /reports/consumption:
+  /metrics/reports/consumption:
     get:
-      tags: [Report]
+      tags: [Metrics]
       summary: Laporan pemakaian bahan baku
       description: >
         Aggregate dari consumption_log per ingredient untuk periode.
@@ -1036,9 +1033,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
-  /reports/export:
+  /metrics/reports/export:
     post:
-      tags: [Report]
+      tags: [Metrics]
       summary: Export laporan ke PDF atau CSV
       description: >
         Generate file download. Server return URL temporary atau stream langsung.
@@ -1086,13 +1083,9 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
-  # ==========================================================
-  # INSIGHT (RULE-BASED MVP, AI-READY POST-MVP)
-  # ==========================================================
-
-  /insight:
+  /metrics/insight:
     get:
-      tags: [Insight]
+      tags: [Metrics]
       summary: List insight cards
       description: >
         Rule-based MVP. Schema sudah siap untuk model_version + confidence
