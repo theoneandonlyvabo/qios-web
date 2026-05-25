@@ -1,6 +1,6 @@
-// core/pos/model.go
+// core/order/model.go
 //
-// Tipe-tipe untuk domain pos (Point of Sale):
+// Tipe-tipe untuk domain order:
 //   - Order, OrderItem, OrderWithItems
 //   - Session, SessionWithOperator
 //   - Request types: CreateOrderRequest, UpdateItemsRequest, ConfirmOrderRequest
@@ -8,7 +8,7 @@
 //   - Status, PaymentMethod constants
 //   - Error sentinels
 
-package pos
+package order
 
 import (
 	"errors"
@@ -57,7 +57,7 @@ const (
 // Order types
 // ----------------------------------------------------------------
 
-// Order merepresentasikan satu baris di pos_orders.
+// Order merepresentasikan satu baris di orders.
 type Order struct {
 	ID                 uuid.UUID      `json:"id"`
 	BusinessID         uuid.UUID      `json:"business_id"`
@@ -73,7 +73,7 @@ type Order struct {
 	UpdatedAt          time.Time      `json:"updated_at"`
 }
 
-// OrderItem merepresentasikan satu baris di pos_order_items.
+// OrderItem merepresentasikan satu baris di order_items.
 // product_name dan unit_price adalah snapshot saat order dibuat.
 type OrderItem struct {
 	ID          uuid.UUID  `json:"id"`
@@ -90,7 +90,7 @@ type OrderWithItems struct {
 	Items []*OrderItem `json:"items"`
 }
 
-// ConfirmResponse — response POST /pos/orders/:id/checkout/confirm.
+// ConfirmResponse — response POST /orders/:id/checkout/confirm.
 // QrisString diisi hanya ketika payment_method = QRIS; nil untuk metode lain.
 type ConfirmResponse struct {
 	Order
@@ -128,19 +128,19 @@ type ItemInput struct {
 	Quantity  int    `json:"quantity"   validate:"required,min=1"`
 }
 
-// CreateOrderRequest — body POST /pos/orders.
+// CreateOrderRequest — body POST /orders.
 type CreateOrderRequest struct {
 	Items []ItemInput `json:"items" validate:"required,min=1,dive"`
 	Note  *string     `json:"note"  validate:"omitempty,max=500"`
 }
 
-// UpdateItemsRequest — body PATCH /pos/orders/:id/items.
+// UpdateItemsRequest — body PATCH /orders/:id/items.
 type UpdateItemsRequest struct {
 	Items []ItemInput `json:"items" validate:"required,min=1,dive"`
 	Note  *string     `json:"note"  validate:"omitempty,max=500"`
 }
 
-// ConfirmOrderRequest — body POST /pos/orders/:id/checkout/confirm.
+// ConfirmOrderRequest — body POST /orders/:id/checkout/confirm.
 type ConfirmOrderRequest struct {
 	PaymentMethod PaymentMethod `json:"payment_method" validate:"required,oneof=CASH QRIS TRANSFER"`
 }

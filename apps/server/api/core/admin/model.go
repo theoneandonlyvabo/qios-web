@@ -4,7 +4,7 @@
 //   - AdminUser                    → row di tabel admin_users
 //   - Business                     → row businesses untuk admin view
 //   - AdminProduct                 → row products untuk admin view
-//   - AdminTransaction             → row pos_orders untuk admin view
+//   - AdminTransaction             → row orders untuk admin view
 //   - Request/Response types untuk semua endpoint admin
 
 package admin

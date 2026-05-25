@@ -1,12 +1,12 @@
-// core/pos/service.go
+// core/order/service.go
 //
-// Logika bisnis untuk domain pos.
+// Logika bisnis untuk domain order.
 // Service tidak menyentuh database langsung — semua via Repository.
 //
 // Order flow: CreateOrder → UpdateItems → BeginCheckout → ConfirmCheckout / VoidOrder
 // Session management: ListActiveSessions, ForceEndSession
 
-package pos
+package order
 
 import (
 	"context"

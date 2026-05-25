@@ -74,7 +74,7 @@ func scanOrder(row interface{ Scan(...any) error }) (*Order, error) {
 
 func (r *PostgresRepository) FindByID(ctx context.Context, id, businessID uuid.UUID) (*OrderWithItems, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT `+orderColumns+` FROM pos_orders WHERE id = $1 AND business_id = $2`,
+		`SELECT `+orderColumns+` FROM orders WHERE id = $1 AND business_id = $2`,
 		id, businessID,
 	)
 	order, err := scanOrder(row)
@@ -96,7 +96,7 @@ func (r *PostgresRepository) FindByID(ctx context.Context, id, businessID uuid.U
 func (r *PostgresRepository) findItemsByOrderID(ctx context.Context, orderID uuid.UUID) ([]*OrderItem, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, product_id, product_name, unit_price, quantity, subtotal
-		 FROM pos_order_items WHERE pos_order_id = $1`,
+		 FROM order_items WHERE order_id = $1`,
 		orderID,
 	)
 	if err != nil {
@@ -131,7 +131,7 @@ func (r *PostgresRepository) List(ctx context.Context, businessID uuid.UUID, f L
 
 	var total int
 	err := r.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM pos_orders WHERE "+where,
+		"SELECT COUNT(*) FROM orders WHERE "+where,
 		args...,
 	).Scan(&total)
 	if err != nil {
@@ -150,7 +150,7 @@ func (r *PostgresRepository) List(ctx context.Context, businessID uuid.UUID, f L
 
 	args = append(args, limit, offset)
 	rows, err := r.db.QueryContext(ctx,
-		"SELECT "+orderColumns+" FROM pos_orders WHERE "+where+
+		"SELECT "+orderColumns+" FROM orders WHERE "+where+
 			fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)-1, len(args)),
 		args...,
 	)

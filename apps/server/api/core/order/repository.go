@@ -1,9 +1,9 @@
-// core/pos/repository.go
+// core/order/repository.go
 //
-// Layer akses data untuk domain pos.
-// Semua interaksi langsung ke tabel pos_orders, pos_order_items, pos_sessions ada di sini.
+// Layer akses data untuk domain order.
+// Semua interaksi langsung ke tabel orders, order_items, order_sessions ada di sini.
 
-package pos
+package order
 
 import (
 	"context"
@@ -64,7 +64,7 @@ func (r *PostgresRepository) FindProducts(ctx context.Context, businessID uuid.U
 		pq.Array(ids), businessID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("pos: find products: %w", err)
+		return nil, fmt.Errorf("order: find products: %w", err)
 	}
 	defer rows.Close()
 
@@ -72,7 +72,7 @@ func (r *PostgresRepository) FindProducts(ctx context.Context, businessID uuid.U
 	for rows.Next() {
 		var s productSnapshot
 		if err := rows.Scan(&s.id, &s.name, &s.price); err != nil {
-			return nil, fmt.Errorf("pos: scan product: %w", err)
+			return nil, fmt.Errorf("order: scan product: %w", err)
 		}
 		out = append(out, s)
 	}
@@ -86,11 +86,11 @@ func (r *PostgresRepository) FindProducts(ctx context.Context, businessID uuid.U
 func (r *PostgresRepository) Create(ctx context.Context, order *Order, items []*OrderItem) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("pos: begin: %w", err)
+		return fmt.Errorf("order: begin: %w", err)
 	}
 
 	err = tx.QueryRowContext(ctx,
-		`INSERT INTO pos_orders
+		`INSERT INTO orders
 		 (business_id, operator_id, order_id, total_amount, status, note)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id, created_at, updated_at`,
@@ -99,19 +99,19 @@ func (r *PostgresRepository) Create(ctx context.Context, order *Order, items []*
 	).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt)
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("pos: insert order: %w", err)
+		return fmt.Errorf("order: insert order: %w", err)
 	}
 
 	for _, item := range items {
 		err = tx.QueryRowContext(ctx,
-			`INSERT INTO pos_order_items (pos_order_id, product_id, product_name, unit_price, quantity)
+			`INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity)
 			 VALUES ($1, $2, $3, $4, $5)
 			 RETURNING id`,
 			order.ID, item.ProductID, item.ProductName, item.UnitPrice, item.Quantity,
 		).Scan(&item.ID)
 		if err != nil {
 			tx.Rollback()
-			return fmt.Errorf("pos: insert item: %w", err)
+			return fmt.Errorf("order: insert item: %w", err)
 		}
 		item.Subtotal = item.UnitPrice * int64(item.Quantity)
 	}
@@ -164,7 +164,7 @@ func scanOrder(row interface{ Scan(...any) error }) (*Order, error) {
 
 func (r *PostgresRepository) FindByID(ctx context.Context, id, businessID uuid.UUID) (*OrderWithItems, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT `+orderColumns+` FROM pos_orders WHERE id = $1 AND business_id = $2`,
+		`SELECT `+orderColumns+` FROM orders WHERE id = $1 AND business_id = $2`,
 		id, businessID,
 	)
 	order, err := scanOrder(row)
@@ -172,7 +172,7 @@ func (r *PostgresRepository) FindByID(ctx context.Context, id, businessID uuid.U
 		return nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("pos: find by id: %w", err)
+		return nil, fmt.Errorf("order: find by id: %w", err)
 	}
 
 	items, err := r.findItemsByOrderID(ctx, id)
@@ -186,11 +186,11 @@ func (r *PostgresRepository) FindByID(ctx context.Context, id, businessID uuid.U
 func (r *PostgresRepository) findItemsByOrderID(ctx context.Context, orderID uuid.UUID) ([]*OrderItem, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, product_id, product_name, unit_price, quantity, subtotal
-		 FROM pos_order_items WHERE pos_order_id = $1`,
+		 FROM order_items WHERE order_id = $1`,
 		orderID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("pos: find items: %w", err)
+		return nil, fmt.Errorf("order: find items: %w", err)
 	}
 	defer rows.Close()
 
@@ -202,7 +202,7 @@ func (r *PostgresRepository) findItemsByOrderID(ctx context.Context, orderID uui
 			&item.ID, &productID, &item.ProductName,
 			&item.UnitPrice, &item.Quantity, &item.Subtotal,
 		); err != nil {
-			return nil, fmt.Errorf("pos: scan item: %w", err)
+			return nil, fmt.Errorf("order: scan item: %w", err)
 		}
 		if productID.Valid {
 			item.ProductID = &productID.UUID
@@ -219,14 +219,14 @@ func (r *PostgresRepository) findItemsByOrderID(ctx context.Context, orderID uui
 func (r *PostgresRepository) FindByOperatorToday(ctx context.Context, operatorID, businessID uuid.UUID) ([]*Order, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT `+orderColumns+`
-		 FROM pos_orders
+		 FROM orders
 		 WHERE operator_id = $1 AND business_id = $2
 		   AND DATE(created_at) = CURRENT_DATE
 		 ORDER BY created_at DESC`,
 		operatorID, businessID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("pos: list my orders: %w", err)
+		return nil, fmt.Errorf("order: list my orders: %w", err)
 	}
 	defer rows.Close()
 
@@ -234,7 +234,7 @@ func (r *PostgresRepository) FindByOperatorToday(ctx context.Context, operatorID
 	for rows.Next() {
 		o, err := scanOrder(rows)
 		if err != nil {
-			return nil, fmt.Errorf("pos: scan order: %w", err)
+			return nil, fmt.Errorf("order: scan order: %w", err)
 		}
 		out = append(out, o)
 	}
@@ -248,16 +248,16 @@ func (r *PostgresRepository) FindByOperatorToday(ctx context.Context, operatorID
 func (r *PostgresRepository) UpdateItems(ctx context.Context, orderID, businessID uuid.UUID, items []*OrderItem) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("pos: begin: %w", err)
+		return fmt.Errorf("order: begin: %w", err)
 	}
 
 	// Delete old items
 	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM pos_order_items WHERE pos_order_id = $1`,
+		`DELETE FROM order_items WHERE order_id = $1`,
 		orderID,
 	); err != nil {
 		tx.Rollback()
-		return fmt.Errorf("pos: delete old items: %w", err)
+		return fmt.Errorf("order: delete old items: %w", err)
 	}
 
 	// Insert new items and recalculate total
@@ -266,26 +266,26 @@ func (r *PostgresRepository) UpdateItems(ctx context.Context, orderID, businessI
 		item.Subtotal = item.UnitPrice * int64(item.Quantity)
 		totalAmount += item.Subtotal
 		if err := tx.QueryRowContext(ctx,
-			`INSERT INTO pos_order_items (pos_order_id, product_id, product_name, unit_price, quantity)
+			`INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity)
 			 VALUES ($1, $2, $3, $4, $5)
 			 RETURNING id`,
 			orderID, item.ProductID, item.ProductName, item.UnitPrice, item.Quantity,
 		).Scan(&item.ID); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("pos: insert item: %w", err)
+			return fmt.Errorf("order: insert item: %w", err)
 		}
 	}
 
 	// Update total_amount
 	res, err := tx.ExecContext(ctx,
-		`UPDATE pos_orders
+		`UPDATE orders
 		 SET total_amount = $1, updated_at = NOW()
 		 WHERE id = $2 AND business_id = $3 AND status = 'DRAFT'`,
 		totalAmount, orderID, businessID,
 	)
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("pos: update total: %w", err)
+		return fmt.Errorf("order: update total: %w", err)
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
@@ -302,13 +302,13 @@ func (r *PostgresRepository) UpdateItems(ctx context.Context, orderID, businessI
 
 func (r *PostgresRepository) BeginCheckout(ctx context.Context, orderID, businessID uuid.UUID) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE pos_orders
+		`UPDATE orders
 		 SET checkout_started_at = NOW(), status = 'PENDING', updated_at = NOW()
 		 WHERE id = $1 AND business_id = $2 AND status = 'DRAFT'`,
 		orderID, businessID,
 	)
 	if err != nil {
-		return fmt.Errorf("pos: begin checkout: %w", err)
+		return fmt.Errorf("order: begin checkout: %w", err)
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
@@ -324,14 +324,14 @@ func (r *PostgresRepository) BeginCheckout(ctx context.Context, orderID, busines
 func (r *PostgresRepository) GetCheckoutStartedAt(ctx context.Context, orderID, businessID uuid.UUID) (*time.Time, error) {
 	var t sql.NullTime
 	err := r.db.QueryRowContext(ctx,
-		`SELECT checkout_started_at FROM pos_orders WHERE id = $1 AND business_id = $2`,
+		`SELECT checkout_started_at FROM orders WHERE id = $1 AND business_id = $2`,
 		orderID, businessID,
 	).Scan(&t)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("pos: get checkout_started_at: %w", err)
+		return nil, fmt.Errorf("order: get checkout_started_at: %w", err)
 	}
 	if !t.Valid {
 		return nil, nil
@@ -345,7 +345,7 @@ func (r *PostgresRepository) GetCheckoutStartedAt(ctx context.Context, orderID, 
 
 func (r *PostgresRepository) Confirm(ctx context.Context, orderID, businessID uuid.UUID, method PaymentMethod, confirmedAt time.Time) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE pos_orders
+		`UPDATE orders
 		 SET status         = 'CONFIRMED',
 		     payment_method = $1,
 		     confirmed_at   = $2,
@@ -354,7 +354,7 @@ func (r *PostgresRepository) Confirm(ctx context.Context, orderID, businessID uu
 		string(method), confirmedAt, orderID, businessID,
 	)
 	if err != nil {
-		return fmt.Errorf("pos: confirm: %w", err)
+		return fmt.Errorf("order: confirm: %w", err)
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
@@ -369,13 +369,13 @@ func (r *PostgresRepository) Confirm(ctx context.Context, orderID, businessID uu
 
 func (r *PostgresRepository) Void(ctx context.Context, orderID, businessID uuid.UUID) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE pos_orders
+		`UPDATE orders
 		 SET status = 'VOIDED', updated_at = NOW()
 		 WHERE id = $1 AND business_id = $2 AND status IN ('DRAFT', 'PENDING')`,
 		orderID, businessID,
 	)
 	if err != nil {
-		return fmt.Errorf("pos: void: %w", err)
+		return fmt.Errorf("order: void: %w", err)
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
@@ -394,7 +394,7 @@ func (r *PostgresRepository) FindProductRecipes(ctx context.Context, productIDs 
 		pq.Array(productIDs),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("pos: find recipes: %w", err)
+		return nil, fmt.Errorf("order: find recipes: %w", err)
 	}
 	defer rows.Close()
 
@@ -424,7 +424,7 @@ func (r *PostgresRepository) GetBusinessQrisString(ctx context.Context, business
 		businessID,
 	).Scan(&qs)
 	if err != nil {
-		return nil, fmt.Errorf("pos: get business qris_string: %w", err)
+		return nil, fmt.Errorf("order: get business qris_string: %w", err)
 	}
 	if qs.Valid {
 		return &qs.String, nil
@@ -453,7 +453,7 @@ func (r *PostgresRepository) InsertConsumptionLog(ctx context.Context, entries [
 			e.Ingredient, e.QuantityUsed, e.Unit, e.ConfirmedAt,
 		); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("pos: insert consumption_log: %w", err)
+			return fmt.Errorf("order: insert consumption_log: %w", err)
 		}
 	}
 	return tx.Commit()
@@ -465,26 +465,26 @@ func (r *PostgresRepository) InsertConsumptionLog(ctx context.Context, entries [
 
 func (r *PostgresRepository) CreateSession(ctx context.Context, s *Session) error {
 	err := r.db.QueryRowContext(ctx,
-		`INSERT INTO pos_sessions (operator_id, business_id)
+		`INSERT INTO order_sessions (operator_id, business_id)
 		 VALUES ($1, $2)
 		 RETURNING id, started_at, last_seen_at`,
 		s.OperatorID, s.BusinessID,
 	).Scan(&s.ID, &s.StartedAt, &s.LastSeenAt)
 	if err != nil {
-		return fmt.Errorf("pos: create session: %w", err)
+		return fmt.Errorf("order: create session: %w", err)
 	}
 	return nil
 }
 
 func (r *PostgresRepository) EndSession(ctx context.Context, sessionID, businessID uuid.UUID) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE pos_sessions
+		`UPDATE order_sessions
 		 SET ended_at = NOW()
 		 WHERE id = $1 AND business_id = $2 AND ended_at IS NULL`,
 		sessionID, businessID,
 	)
 	if err != nil {
-		return fmt.Errorf("pos: end session: %w", err)
+		return fmt.Errorf("order: end session: %w", err)
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
@@ -497,14 +497,14 @@ func (r *PostgresRepository) ListActiveSessions(ctx context.Context, businessID 
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT ps.id, ps.operator_id, ps.business_id, ps.started_at, ps.ended_at, ps.last_seen_at,
 		        o.name, o.operator_code
-		 FROM pos_sessions ps
+		 FROM order_sessions ps
 		 JOIN operators o ON o.id = ps.operator_id
 		 WHERE ps.business_id = $1 AND ps.ended_at IS NULL
 		 ORDER BY ps.started_at DESC`,
 		businessID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("pos: list sessions: %w", err)
+		return nil, fmt.Errorf("order: list sessions: %w", err)
 	}
 	defer rows.Close()
 
@@ -516,7 +516,7 @@ func (r *PostgresRepository) ListActiveSessions(ctx context.Context, businessID 
 			&sw.ID, &sw.OperatorID, &sw.BusinessID, &sw.StartedAt,
 			&endedAt, &sw.LastSeenAt, &sw.OperatorName, &sw.OperatorCode,
 		); err != nil {
-			return nil, fmt.Errorf("pos: scan session: %w", err)
+			return nil, fmt.Errorf("order: scan session: %w", err)
 		}
 		if endedAt.Valid {
 			sw.EndedAt = &endedAt.Time
@@ -528,7 +528,7 @@ func (r *PostgresRepository) ListActiveSessions(ctx context.Context, businessID 
 
 func (r *PostgresRepository) TouchSession(ctx context.Context, sessionID uuid.UUID) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE pos_sessions SET last_seen_at = NOW() WHERE id = $1 AND ended_at IS NULL`,
+		`UPDATE order_sessions SET last_seen_at = NOW() WHERE id = $1 AND ended_at IS NULL`,
 		sessionID,
 	)
 	return err

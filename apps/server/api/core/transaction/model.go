@@ -6,7 +6,7 @@
 //   - ListFilter, ListResult → filter dan pagination untuk List
 //
 // Domain ini hanya menyediakan akses baca ke history transaksi.
-// Write operations (create, confirm, void) sudah dipindah ke domain /pos.
+// Write operations (create, confirm, void) sudah dipindah ke domain /order.
 
 package transaction
 
@@ -40,7 +40,7 @@ const (
 	PaymentTransfer       PaymentMethod = "TRANSFER"
 )
 
-// Order merepresentasikan satu baris di pos_orders.
+// Order merepresentasikan satu baris di orders.
 type Order struct {
 	ID            uuid.UUID      `json:"id"`
 	BusinessID    uuid.UUID      `json:"business_id"`
@@ -55,7 +55,7 @@ type Order struct {
 	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
-// OrderItem merepresentasikan satu baris di pos_order_items.
+// OrderItem merepresentasikan satu baris di order_items.
 type OrderItem struct {
 	ID          uuid.UUID  `json:"id"`
 	ProductID   *uuid.UUID `json:"product_id"`

@@ -21,7 +21,7 @@ import (
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/auth"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/dashboard"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/insight"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/pos"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/order"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/product"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/report"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/transaction"
@@ -133,9 +133,9 @@ func main() {
 	userSvc := user.NewService(userRepo, userPlan)
 	user.RegisterRoutes(e, user.NewHandler(userSvc), authMiddleware)
 
-	posRepo := pos.NewPostgresRepository(db)
-	posSvc := pos.NewService(posRepo)
-	pos.RegisterRoutes(e, pos.NewHandler(posSvc), authMiddleware)
+	orderRepo := order.NewPostgresRepository(db)
+	orderSvc := order.NewService(orderRepo)
+	order.RegisterRoutes(e, order.NewHandler(orderSvc), authMiddleware)
 
 	productRepo := product.NewPostgresRepository(db)
 	productSvc := product.NewService(productRepo)
