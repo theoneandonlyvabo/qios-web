@@ -270,7 +270,7 @@ export function LoginPage() {
           });
 
       persistSession(role, session);
-      router.replace(isCashier ? "/kasir/dashboard" : "/owner/dashboard");
+      router.replace(isCashier ? "/kasir/dashboard" : "/dashboard");
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -343,7 +343,7 @@ export function LoginPage() {
       });
 
       persistSession("owner", session);
-      router.replace("/owner/dashboard");
+      router.replace("/dashboard");
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
