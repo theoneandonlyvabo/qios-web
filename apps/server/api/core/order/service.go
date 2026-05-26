@@ -23,7 +23,7 @@ type Service interface {
 	UpdateItems(ctx context.Context, businessID, orderID uuid.UUID, req UpdateItemsRequest) (*OrderWithItems, error)
 	BeginCheckout(ctx context.Context, businessID, orderID uuid.UUID) (*Order, error)
 	ConfirmCheckout(ctx context.Context, businessID, orderID uuid.UUID, req ConfirmOrderRequest) (*ConfirmResponse, error)
-	VoidOrder(ctx context.Context, businessID, orderID uuid.UUID) error
+	VoidOrder(ctx context.Context, businessID, orderID uuid.UUID, callerOperatorID *uuid.UUID) error
 	ListMyOrders(ctx context.Context, operatorID, businessID uuid.UUID) ([]*Order, error)
 	ListActiveSessions(ctx context.Context, businessID uuid.UUID) ([]*SessionWithOperator, error)
 	ForceEndSession(ctx context.Context, sessionID, businessID uuid.UUID) error
@@ -186,20 +186,12 @@ func (s *service) BeginCheckout(ctx context.Context, businessID, orderID uuid.UU
 // ----------------------------------------------------------------
 
 func (s *service) ConfirmCheckout(ctx context.Context, businessID, orderID uuid.UUID, req ConfirmOrderRequest) (*ConfirmResponse, error) {
-	// Validate gesture timing: must be ≥ 800ms since begin-checkout
-	startedAt, err := s.repo.GetCheckoutStartedAt(ctx, orderID, businessID)
-	if err != nil {
-		return nil, err
-	}
-	if startedAt == nil {
-		return nil, ErrCheckoutNotStarted
-	}
-	if time.Since(*startedAt) < 800*time.Millisecond {
-		return nil, ErrGestureTooFast
-	}
-
+	// ConfirmAtomic holds a FOR UPDATE row lock, re-checks status and timing,
+	// then flips status to CONFIRMED — all in one transaction. This prevents
+	// a concurrent confirm from passing the 800ms guard and firing side-effects
+	// (consumption log, QRIS lookup) more than once.
 	now := time.Now()
-	if err := s.repo.Confirm(ctx, orderID, businessID, req.PaymentMethod, now); err != nil {
+	if err := s.repo.ConfirmAtomic(ctx, orderID, businessID, req.PaymentMethod, now, 800*time.Millisecond); err != nil {
 		return nil, err
 	}
 
@@ -233,8 +225,8 @@ func (s *service) ConfirmCheckout(ctx context.Context, businessID, orderID uuid.
 // VoidOrder
 // ----------------------------------------------------------------
 
-func (s *service) VoidOrder(ctx context.Context, businessID, orderID uuid.UUID) error {
-	return s.repo.Void(ctx, orderID, businessID)
+func (s *service) VoidOrder(ctx context.Context, businessID, orderID uuid.UUID, callerOperatorID *uuid.UUID) error {
+	return s.repo.Void(ctx, orderID, businessID, callerOperatorID)
 }
 
 // ----------------------------------------------------------------

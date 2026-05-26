@@ -43,7 +43,7 @@ func Load() *Config {
 		DBUser:     getEnv("DB_USER", "postgres"),
 		DBPassword: getEnv("DB_PASSWORD", ""),
 		DBName:     getEnv("DB_NAME", "qios"),
-		DBSSLMode:  getEnv("DB_SSL_MODE", "disable"),
+		DBSSLMode:  getEnv("DB_SSL_MODE", "require"),
 
 		DBMaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 25),
 		DBMaxIdleConns:    getEnvInt("DB_MAX_IDLE_CONNS", 5),

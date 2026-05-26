@@ -30,7 +30,12 @@ type Repository interface {
 	BeginCheckout(ctx context.Context, orderID, businessID uuid.UUID) error
 	GetCheckoutStartedAt(ctx context.Context, orderID, businessID uuid.UUID) (*time.Time, error)
 	Confirm(ctx context.Context, orderID, businessID uuid.UUID, method PaymentMethod, confirmedAt time.Time) error
-	Void(ctx context.Context, orderID, businessID uuid.UUID) error
+	// ConfirmAtomic performs the timing guard and the status transition atomically
+	// inside a single transaction using SELECT FOR UPDATE. This prevents a race
+	// where two concurrent confirms both pass the 800ms guard then both fire
+	// downstream side-effects before one of them gets ErrNotPending.
+	ConfirmAtomic(ctx context.Context, orderID, businessID uuid.UUID, method PaymentMethod, confirmedAt time.Time, minElapsed time.Duration) error
+	Void(ctx context.Context, orderID, businessID uuid.UUID, callerOperatorID *uuid.UUID) error
 
 	// Recipe + consumption
 	FindProductRecipes(ctx context.Context, productIDs []uuid.UUID) (map[uuid.UUID][]RecipeItem, error)
@@ -364,16 +369,84 @@ func (r *PostgresRepository) Confirm(ctx context.Context, orderID, businessID uu
 }
 
 // ----------------------------------------------------------------
+// ConfirmAtomic
+// ----------------------------------------------------------------
+
+func (r *PostgresRepository) ConfirmAtomic(ctx context.Context, orderID, businessID uuid.UUID, method PaymentMethod, confirmedAt time.Time, minElapsed time.Duration) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("order: confirm begin: %w", err)
+	}
+
+	var status string
+	var startedAt sql.NullTime
+	err = tx.QueryRowContext(ctx,
+		`SELECT status, checkout_started_at FROM orders
+		 WHERE id = $1 AND business_id = $2
+		 FOR UPDATE`,
+		orderID, businessID,
+	).Scan(&status, &startedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		tx.Rollback()
+		return ErrNotFound
+	}
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("order: confirm select: %w", err)
+	}
+	if status != "PENDING" {
+		tx.Rollback()
+		return ErrNotPending
+	}
+	if !startedAt.Valid {
+		tx.Rollback()
+		return ErrCheckoutNotStarted
+	}
+	if time.Since(startedAt.Time) < minElapsed {
+		tx.Rollback()
+		return ErrGestureTooFast
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`UPDATE orders
+		 SET status         = 'CONFIRMED',
+		     payment_method = $1,
+		     confirmed_at   = $2,
+		     updated_at     = NOW()
+		 WHERE id = $3 AND business_id = $4`,
+		string(method), confirmedAt, orderID, businessID,
+	)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("order: confirm update: %w", err)
+	}
+	return tx.Commit()
+}
+
+// ----------------------------------------------------------------
 // Void
 // ----------------------------------------------------------------
 
-func (r *PostgresRepository) Void(ctx context.Context, orderID, businessID uuid.UUID) error {
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE orders
-		 SET status = 'VOIDED', updated_at = NOW()
-		 WHERE id = $1 AND business_id = $2 AND status IN ('DRAFT', 'PENDING')`,
-		orderID, businessID,
-	)
+func (r *PostgresRepository) Void(ctx context.Context, orderID, businessID uuid.UUID, callerOperatorID *uuid.UUID) error {
+	var res sql.Result
+	var err error
+	if callerOperatorID != nil {
+		// Operator: can only void their own orders.
+		res, err = r.db.ExecContext(ctx,
+			`UPDATE orders
+			 SET status = 'VOIDED', updated_at = NOW()
+			 WHERE id = $1 AND business_id = $2 AND operator_id = $3 AND status IN ('DRAFT', 'PENDING')`,
+			orderID, businessID, *callerOperatorID,
+		)
+	} else {
+		// Owner: can void any order in their business.
+		res, err = r.db.ExecContext(ctx,
+			`UPDATE orders
+			 SET status = 'VOIDED', updated_at = NOW()
+			 WHERE id = $1 AND business_id = $2 AND status IN ('DRAFT', 'PENDING')`,
+			orderID, businessID,
+		)
+	}
 	if err != nil {
 		return fmt.Errorf("order: void: %w", err)
 	}
