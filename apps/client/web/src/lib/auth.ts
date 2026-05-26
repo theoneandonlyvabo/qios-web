@@ -83,6 +83,21 @@ export async function loginCashier(credentials: {
   };
 }
 
+export async function loginCashierQr(credentials: {
+  qrToken: string;
+}): Promise<AuthSession> {
+  const payload = await postJson<CashierLoginData>("/kasir/auth/login/qr", {
+    qr_token: credentials.qrToken,
+  });
+
+  return {
+    accessToken: payload.access_token,
+    role: "cashier",
+    profile: payload.operator,
+    business: payload.business,
+  };
+}
+
 export function persistSession(role: LoginRole, session: AuthSession) {
   window.localStorage.setItem("qios.auth.access_token", session.accessToken);
   window.localStorage.setItem("qios.auth.role", role);

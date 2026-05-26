@@ -37,10 +37,18 @@ input {
   animation: qios-rotator 9.6s infinite;
   display: block;
   inset: 0 auto auto 0;
+  max-width: 100%;
   opacity: 0;
   position: absolute;
   padding-bottom: 0.12em;
   transform: translateY(0.35em);
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .qios-rotator {
+    min-height: 1.34em;
+  }
 }
 
 @keyframes qios-rotator {
