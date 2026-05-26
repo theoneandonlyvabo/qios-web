@@ -64,6 +64,19 @@ export async function loginOwner(credentials: {
   };
 }
 
+export async function loginOwnerGoogle(credentials: {
+  email: string;
+  name: string;
+}): Promise<AuthSession> {
+  const payload = await postJson<OwnerLoginData>("/auth/google", credentials);
+
+  return {
+    accessToken: payload.access_token,
+    role: "owner",
+    profile: payload.user,
+  };
+}
+
 export async function loginCashier(credentials: {
   businessId: string;
   operatorCode: string;
@@ -86,7 +99,7 @@ export async function loginCashier(credentials: {
 export async function loginCashierQr(credentials: {
   qrToken: string;
 }): Promise<AuthSession> {
-  const payload = await postJson<CashierLoginData>("/kasir/auth/login/qr", {
+  const payload = await postJson<CashierLoginData>("/operator/auth/login/qr", {
     qr_token: credentials.qrToken,
   });
 

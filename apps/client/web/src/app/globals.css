@@ -45,6 +45,15 @@ input {
   white-space: nowrap;
 }
 
+.qios-auth-copy {
+  animation: qios-auth-copy-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.qios-auth-panel {
+  animation: qios-auth-panel-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: 50% 0;
+}
+
 @media (min-width: 640px) {
   .qios-rotator {
     min-height: 1.34em;
@@ -67,6 +76,38 @@ input {
   100% {
     opacity: 0;
     transform: translateY(-0.3em);
+  }
+}
+
+@keyframes qios-auth-copy-enter {
+  0% {
+    filter: blur(4px);
+    opacity: 0;
+    transform: translateY(0.45rem);
+  }
+
+  100% {
+    filter: blur(0);
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes qios-auth-panel-enter {
+  0% {
+    filter: blur(6px);
+    opacity: 0;
+    transform: translateY(0.7rem) scale(0.985);
+  }
+
+  65% {
+    opacity: 1;
+  }
+
+  100% {
+    filter: blur(0);
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 

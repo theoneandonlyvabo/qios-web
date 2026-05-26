@@ -12,6 +12,7 @@ import {
   loginCashier,
   loginCashierQr,
   loginOwner,
+  loginOwnerGoogle,
   persistSession,
 } from "@/lib/auth";
 
@@ -55,6 +56,9 @@ const animatedHeadlines = [
   "Insight Bisnis Anda.",
 ];
 
+const GOOGLE_IDENTITY_SCRIPT_ID = "google-identity-services";
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+
 const roleCopy: Record<
   LoginRole,
   {
@@ -81,6 +85,35 @@ const roleCopy: Record<
   },
 };
 
+type GoogleTokenResponse = {
+  access_token?: string;
+  error?: string;
+  error_description?: string;
+};
+
+type GoogleProfile = {
+  email?: string;
+  name?: string;
+};
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        oauth2: {
+          initTokenClient: (options: {
+            callback: (response: GoogleTokenResponse) => void;
+            client_id: string;
+            scope: string;
+          }) => {
+            requestAccessToken: (options?: { prompt?: string }) => void;
+          };
+        };
+      };
+    };
+  }
+}
+
 function createQrLoginCode() {
   const randomPart =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -88,6 +121,49 @@ function createQrLoginCode() {
       : Math.random().toString(36).slice(2, 10);
 
   return `QIOS-KASIR-${randomPart.toUpperCase()}`;
+}
+
+function loadGoogleIdentityScript() {
+  if (window.google?.accounts?.oauth2) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const existingScript = document.getElementById(GOOGLE_IDENTITY_SCRIPT_ID);
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener(
+        "error",
+        () => reject(new Error("Google login gagal dimuat.")),
+        { once: true },
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.defer = true;
+    script.id = GOOGLE_IDENTITY_SCRIPT_ID;
+    script.src = "https://accounts.google.com/gsi/client";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Google login gagal dimuat."));
+    document.head.appendChild(script);
+  });
+}
+
+async function fetchGoogleProfile(accessToken: string): Promise<GoogleProfile> {
+  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Profil Google tidak bisa dibaca.");
+  }
+
+  return (await response.json()) as GoogleProfile;
 }
 
 export function LoginPage() {
@@ -106,6 +182,7 @@ export function LoginPage() {
   );
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -149,11 +226,11 @@ export function LoginPage() {
   }, [isCashierQr, qrLoginCode, router]);
 
   const canSubmit = useMemo(() => {
-    if (isLoading) return false;
+    if (isLoading || isGoogleLoading) return false;
     if (!identifier.trim() || !password.trim()) return false;
     if (isCashier && !businessId.trim()) return false;
     return true;
-  }, [businessId, identifier, isCashier, isLoading, password]);
+  }, [businessId, identifier, isCashier, isGoogleLoading, isLoading, password]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -205,6 +282,78 @@ export function LoginPage() {
     }
   }
 
+  async function handleOwnerGoogleLogin() {
+    setError("");
+
+    if (!GOOGLE_CLIENT_ID) {
+      setError("Google Client ID belum dikonfigurasi untuk login email bisnis.");
+      return;
+    }
+
+    setIsGoogleLoading(true);
+
+    try {
+      await loadGoogleIdentityScript();
+
+      const tokenClient = window.google?.accounts.oauth2.initTokenClient({
+        callback: (response) => {
+          void completeOwnerGoogleLogin(response);
+        },
+        client_id: GOOGLE_CLIENT_ID,
+        scope: "openid email profile",
+      });
+
+      if (!tokenClient) {
+        throw new Error("Google login belum siap.");
+      }
+
+      tokenClient.requestAccessToken({ prompt: "select_account" });
+      window.setTimeout(() => setIsGoogleLoading(false), 60000);
+    } catch (caughtError) {
+      setIsGoogleLoading(false);
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Login Google gagal dimuat.",
+      );
+    }
+  }
+
+  async function completeOwnerGoogleLogin(response: GoogleTokenResponse) {
+    try {
+      if (response.error) {
+        throw new Error(
+          response.error_description ?? "Akun Google belum dipilih.",
+        );
+      }
+
+      if (!response.access_token) {
+        throw new Error("Akun Google belum dipilih.");
+      }
+
+      const profile = await fetchGoogleProfile(response.access_token);
+
+      if (!profile.email || !profile.name) {
+        throw new Error("Email bisnis dari Google tidak valid.");
+      }
+
+      const session = await loginOwnerGoogle({
+        email: profile.email,
+        name: profile.name,
+      });
+
+      persistSession("owner", session);
+      router.replace("/owner/dashboard");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Email bisnis belum terdaftar sebagai owner.",
+      );
+      setIsGoogleLoading(false);
+    }
+  }
+
   return (
     <main
       className={`relative min-h-dvh overflow-x-hidden transition-colors duration-300 lg:h-screen lg:overflow-hidden ${
@@ -240,7 +389,10 @@ export function LoginPage() {
               }`}
             >
               <div className="p-5 sm:p-6 lg:p-5 xl:p-6">
-                <div className="mb-4 text-center lg:mb-5">
+                <div
+                  className="qios-auth-copy mb-4 text-center lg:mb-5"
+                  key={role}
+                >
                   <h1 className="text-3xl font-black tracking-normal sm:text-[1.95rem]">
                     {activeCopy.title}
                   </h1>
@@ -266,9 +418,9 @@ export function LoginPage() {
                     return (
                       <button
                         aria-selected={isActive}
-                        className={`h-10 rounded-xl text-sm font-extrabold transition ${
+                        className={`h-10 rounded-xl text-sm font-extrabold transition-all duration-300 ease-out active:scale-[0.98] ${
                           isActive
-                            ? "bg-[#df2600] text-white shadow-[0_12px_24px_rgba(223,38,0,0.24)]"
+                            ? "scale-[1.01] bg-[#df2600] text-white shadow-[0_12px_24px_rgba(223,38,0,0.24)]"
                             : isDark
                               ? "text-white/50 hover:text-white"
                               : "text-black/48 hover:text-black"
@@ -289,7 +441,11 @@ export function LoginPage() {
                   })}
                 </div>
 
-                <form className="space-y-3" onSubmit={handleSubmit}>
+                <form
+                  className="qios-auth-panel space-y-3"
+                  key={`${role}-${cashierLoginMethod}`}
+                  onSubmit={handleSubmit}
+                >
                   {isCashier ? (
                     <div
                       className={`grid grid-cols-2 rounded-2xl p-1 ${
@@ -304,9 +460,9 @@ export function LoginPage() {
                         return (
                           <button
                             aria-selected={isActive}
-                            className={`h-9 rounded-xl text-xs font-extrabold transition sm:text-sm ${
+                            className={`h-9 rounded-xl text-xs font-extrabold transition-all duration-300 ease-out active:scale-[0.98] sm:text-sm ${
                               isActive
-                                ? "bg-[#df2600] text-white shadow-[0_10px_20px_rgba(223,38,0,0.22)]"
+                                ? "scale-[1.01] bg-[#df2600] text-white shadow-[0_10px_20px_rgba(223,38,0,0.22)]"
                                 : isDark
                                   ? "text-white/50 hover:text-white"
                                   : "text-black/48 hover:text-black"
@@ -439,6 +595,15 @@ export function LoginPage() {
                       <span aria-hidden="true">&gt;</span>
                     </button>
                   ) : null}
+
+                  {!isCashier ? (
+                    <OwnerGoogleLoginButton
+                      disabled={isLoading || isGoogleLoading}
+                      isDark={isDark}
+                      isLoading={isGoogleLoading}
+                      onClick={handleOwnerGoogleLogin}
+                    />
+                  ) : null}
                 </form>
               </div>
 
@@ -459,6 +624,78 @@ export function LoginPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function OwnerGoogleLoginButton({
+  disabled,
+  isDark,
+  isLoading,
+  onClick,
+}: {
+  disabled: boolean;
+  isDark: boolean;
+  isLoading: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="pt-1">
+      <div
+        className={`mb-3 flex items-center gap-3 text-[0.65rem] font-black uppercase tracking-wide ${
+          isDark ? "text-white/28" : "text-black/28"
+        }`}
+      >
+        <span
+          className={`h-px flex-1 ${isDark ? "bg-white/10" : "bg-black/8"}`}
+        />
+        <span>atau</span>
+        <span
+          className={`h-px flex-1 ${isDark ? "bg-white/10" : "bg-black/8"}`}
+        />
+      </div>
+      <button
+        className={`flex h-11 w-full items-center justify-center gap-3 rounded-2xl border px-5 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 sm:h-12 ${
+          isDark
+            ? "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
+            : "border-black/8 bg-white text-[#141414] shadow-[0_12px_26px_rgba(17,17,17,0.06)] hover:border-[#df2600]/20 hover:bg-[#fff8f5]"
+        }`}
+        disabled={disabled}
+        onClick={onClick}
+        type="button"
+      >
+        <GoogleLogo />
+        {isLoading ? "Membuka pilihan email..." : "Masuk dengan Email Bisnis"}
+      </button>
+    </div>
+  );
+}
+
+function GoogleLogo() {
+  return (
+    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white">
+      <svg
+        aria-hidden="true"
+        className="h-4 w-4"
+        viewBox="0 0 24 24"
+      >
+        <path
+          d="M21.805 10.023h-9.58v3.955h5.514c-.238 1.277-.96 2.36-2.04 3.087v2.565h3.302c1.934-1.781 3.049-4.405 3.049-7.514 0-.713-.064-1.4-.245-2.093Z"
+          fill="#4285F4"
+        />
+        <path
+          d="M12.225 22c2.76 0 5.077-.913 6.769-2.47l-3.302-2.565c-.913.612-2.08.974-3.467.974-2.666 0-4.923-1.8-5.728-4.22H3.084v2.648C4.765 19.704 8.22 22 12.225 22Z"
+          fill="#34A853"
+        />
+        <path
+          d="M6.497 13.719a6.01 6.01 0 0 1 0-3.837V7.234H3.084a10.006 10.006 0 0 0 0 9.133l3.413-2.648Z"
+          fill="#FBBC05"
+        />
+        <path
+          d="M12.225 5.962c1.502 0 2.85.516 3.91 1.529l2.934-2.934C17.3 2.913 14.983 2 12.225 2 8.22 2 4.765 4.296 3.084 7.234l3.413 2.648c.805-2.42 3.062-3.92 5.728-3.92Z"
+          fill="#EA4335"
+        />
+      </svg>
+    </span>
   );
 }
 
