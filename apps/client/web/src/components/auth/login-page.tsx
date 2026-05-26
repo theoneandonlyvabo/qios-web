@@ -365,7 +365,7 @@ export function LoginPage() {
       <ThemeToggle isDark={isDark} onToggle={() => setIsDark((value) => !value)} />
 
       <div
-        className={`pointer-events-none absolute inset-0 ${
+        className={`qios-page-glow pointer-events-none absolute inset-0 ${
           isDark
             ? "bg-[radial-gradient(circle_at_78%_30%,rgba(220,38,38,0.18),transparent_32%),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)]"
             : "bg-[radial-gradient(circle_at_78%_30%,rgba(218,45,12,0.10),transparent_32%),linear-gradient(90deg,rgba(20,20,20,0.05)_1px,transparent_1px)]"
@@ -375,7 +375,7 @@ export function LoginPage() {
       <div className="relative mx-auto grid min-h-dvh w-full max-w-7xl grid-cols-1 gap-6 px-4 py-5 sm:px-6 md:px-8 lg:h-screen lg:min-h-0 lg:grid-cols-[1fr_0.82fr] lg:items-center lg:gap-10 lg:px-10 lg:py-5 xl:gap-12 xl:px-12 xl:py-7">
         <HeroPanel isDark={isDark} />
 
-        <section className="order-1 flex items-center justify-center pt-14 lg:order-2 lg:h-full lg:pt-0">
+        <section className="qios-login-enter order-1 flex items-center justify-center pt-14 lg:order-2 lg:h-full lg:pt-0">
           <div className="w-full max-w-[25.75rem]">
             <div className="mb-5 flex lg:hidden">
               <BrandMark />
@@ -1135,11 +1135,11 @@ function BrandMark() {
 function HeroPanel({ isDark }: { isDark: boolean }) {
   return (
     <section className="order-2 flex flex-col justify-center pb-8 pt-2 lg:order-1 lg:h-full lg:min-h-0 lg:py-0">
-      <div className="mb-6 hidden pt-4 lg:mb-7 lg:flex xl:mb-8">
+      <div className="qios-hero-brand mb-6 hidden pt-4 lg:mb-7 lg:flex xl:mb-8">
         <BrandMark />
       </div>
 
-      <h2 className="max-w-3xl text-4xl font-black leading-[1.08] tracking-normal sm:text-5xl lg:text-[clamp(2.55rem,4vw,3.9rem)]">
+      <h2 className="qios-hero-title max-w-3xl text-4xl font-black leading-[1.08] tracking-normal sm:text-5xl lg:text-[clamp(2.55rem,4vw,3.9rem)]">
         <span className="block lg:whitespace-nowrap">Kendali Penuh Atas</span>
         <span
           className="qios-rotator text-[clamp(2rem,9vw,2.5rem)] text-[#df2600] sm:text-5xl lg:text-[clamp(2.55rem,4vw,3.9rem)]"
@@ -1158,7 +1158,7 @@ function HeroPanel({ isDark }: { isDark: boolean }) {
       </h2>
 
       <p
-        className={`mt-5 max-w-2xl text-base leading-7 sm:text-lg lg:mt-6 lg:leading-8 ${
+        className={`qios-hero-copy mt-5 max-w-2xl text-base leading-7 sm:text-lg lg:mt-6 lg:leading-8 ${
           isDark ? "text-white/58" : "text-black/55"
         }`}
       >
@@ -1166,7 +1166,7 @@ function HeroPanel({ isDark }: { isDark: boolean }) {
         Dirancang khusus untuk UMKM yang siap naik kelas.
       </p>
 
-      <div className="mt-8 grid gap-4 sm:mt-9 lg:mt-10 lg:grid-cols-[1fr_16rem]">
+      <div className="qios-hero-showcase mt-8 grid gap-4 sm:mt-9 lg:mt-10 lg:grid-cols-[1fr_16rem]">
         <div className="grid gap-3">
           {features.map((feature) => (
             <div

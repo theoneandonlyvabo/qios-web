@@ -54,6 +54,38 @@ input {
   transform-origin: 50% 0;
 }
 
+.qios-page-glow {
+  animation: qios-page-glow-enter 900ms ease-out both;
+}
+
+.qios-hero-brand,
+.qios-hero-title,
+.qios-hero-copy,
+.qios-hero-showcase,
+.qios-login-enter {
+  animation: qios-page-enter 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.qios-hero-brand {
+  animation-delay: 80ms;
+}
+
+.qios-hero-title {
+  animation-delay: 160ms;
+}
+
+.qios-hero-copy {
+  animation-delay: 240ms;
+}
+
+.qios-hero-showcase {
+  animation-delay: 340ms;
+}
+
+.qios-login-enter {
+  animation-delay: 260ms;
+}
+
 @media (min-width: 640px) {
   .qios-rotator {
     min-height: 1.34em;
@@ -76,6 +108,36 @@ input {
   100% {
     opacity: 0;
     transform: translateY(-0.3em);
+  }
+}
+
+@keyframes qios-page-glow-enter {
+  0% {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes qios-page-enter {
+  0% {
+    filter: blur(8px);
+    opacity: 0;
+    transform: translateY(1rem) scale(0.985);
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    filter: blur(0);
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
