@@ -19,7 +19,7 @@ func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc
 	e.POST("/admin/auth/logout", h.Logout)
 
 	// Protected routes — butuh JWT role=admin
-	g := e.Group("/admin", authMiddleware, appmiddleware.RequireAdmin)
+	g := e.Group("/admin", authMiddleware, appmiddleware.RequireAdmin, appmiddleware.RateLimitAdmin)
 
 	g.GET("/me", h.Me)
 

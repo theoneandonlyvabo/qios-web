@@ -1,35 +1,19 @@
-// core/analytics/handler.go
+// core/metrics/handler_overview.go
+//
+// Handler untuk Overview (dari analytics).
+// Endpoint: GET /metrics/overview
 
-package analytics
+package metrics
 
 import (
-	"errors"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/response"
 )
 
-type Handler struct {
-	q *Queries
-}
-
-func NewHandler(q *Queries) *Handler {
-	return &Handler{q: q}
-}
-
-func businessIDFromCtx(c echo.Context) (uuid.UUID, error) {
-	raw, _ := c.Get("business_id").(string)
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil, errors.New("business_id tidak valid di token")
-	}
-	return id, nil
-}
-
-// GET /analytics/overview?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&compare_with=previous_period|previous_year|none
+// GET /metrics/overview?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&compare_with=previous_period|previous_year|none
 func (h *Handler) Overview(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {

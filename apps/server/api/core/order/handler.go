@@ -1,21 +1,21 @@
-// core/pos/handler.go
+// core/order/handler.go
 //
-// Layer HTTP untuk domain pos.
+// Layer HTTP untuk domain order.
 // Handler hanya parsing input, manggil service, dan terjemahkan error ke response.
 //
 // Operator routes (RequireOperator):
-//   POST /pos/orders                            → CreateOrder
-//   GET  /pos/orders                            → ListMyOrders
-//   PATCH /pos/orders/:order_id/items           → UpdateItems
-//   POST /pos/orders/:order_id/checkout/begin   → BeginCheckout
-//   POST /pos/orders/:order_id/checkout/confirm → ConfirmCheckout
-//   POST /pos/orders/:order_id/void             → VoidOrder
+//   POST /orders                            → CreateOrder
+//   GET  /orders                            → ListMyOrders
+//   PATCH /orders/:order_id/items           → UpdateItems
+//   POST /orders/:order_id/checkout/begin   → BeginCheckout
+//   POST /orders/:order_id/checkout/confirm → ConfirmCheckout
+//   POST /orders/:order_id/void             → VoidOrder
 //
 // Owner routes (RequireOwner):
-//   GET    /pos/sessions              → ListActiveSessions
-//   DELETE /pos/sessions/:session_id  → ForceEndSession
+//   GET    /orders/sessions              → ListActiveSessions
+//   DELETE /orders/sessions/:session_id  → ForceEndSession
 
-package pos
+package order
 
 import (
 	"errors"
@@ -81,7 +81,7 @@ func sessionIDParam(c echo.Context) (uuid.UUID, error) {
 // Order handlers
 // ----------------------------------------------------------------
 
-// POST /pos/orders
+// POST /orders
 func (h *Handler) CreateOrder(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -104,7 +104,7 @@ func (h *Handler) CreateOrder(c echo.Context) error {
 	return response.Created(c, out)
 }
 
-// GET /pos/orders
+// GET /orders
 func (h *Handler) ListMyOrders(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -124,7 +124,7 @@ func (h *Handler) ListMyOrders(c echo.Context) error {
 	return response.OK(c, orders)
 }
 
-// PATCH /pos/orders/:order_id/items
+// PATCH /orders/:order_id/items
 func (h *Handler) UpdateItems(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -150,7 +150,7 @@ func (h *Handler) UpdateItems(c echo.Context) error {
 	return response.OK(c, out)
 }
 
-// POST /pos/orders/:order_id/checkout/begin
+// POST /orders/:order_id/checkout/begin
 func (h *Handler) BeginCheckout(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -168,7 +168,7 @@ func (h *Handler) BeginCheckout(c echo.Context) error {
 	return response.OK(c, out)
 }
 
-// POST /pos/orders/:order_id/checkout/confirm
+// POST /orders/:order_id/checkout/confirm
 func (h *Handler) ConfirmCheckout(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -194,7 +194,7 @@ func (h *Handler) ConfirmCheckout(c echo.Context) error {
 	return response.OK(c, out)
 }
 
-// POST /pos/orders/:order_id/void
+// POST /orders/:order_id/void
 func (h *Handler) VoidOrder(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -215,7 +215,7 @@ func (h *Handler) VoidOrder(c echo.Context) error {
 // Session handlers
 // ----------------------------------------------------------------
 
-// GET /pos/sessions
+// GET /orders/sessions
 func (h *Handler) ListActiveSessions(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -229,7 +229,7 @@ func (h *Handler) ListActiveSessions(c echo.Context) error {
 	return response.OK(c, sessions)
 }
 
-// DELETE /pos/sessions/:session_id
+// DELETE /orders/sessions/:session_id
 func (h *Handler) ForceEndSession(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {

@@ -1,8 +1,9 @@
-// core/dashboard/handler.go
+// core/metrics/handler_summary.go
 //
-// Handler untuk 4 dashboard endpoints — semua owner-only, read-only.
+// Handler untuk Summary, Trend, TopProducts, PeakHours (dari dashboard).
+// Endpoint: GET /metrics/summary, /metrics/trend, /metrics/top-products, /metrics/peak-hours
 
-package dashboard
+package metrics
 
 import (
 	"errors"
@@ -27,12 +28,12 @@ func businessIDFromCtx(c echo.Context) (uuid.UUID, error) {
 	raw, _ := c.Get("business_id").(string)
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, errors.New("invalid business_id in token")
+		return uuid.Nil, errors.New("business_id tidak valid di token")
 	}
 	return id, nil
 }
 
-// GET /dashboard/summary?period=today|this_week|this_month|last_month
+// GET /metrics/summary?period=today|this_week|this_month|last_month
 func (h *Handler) Summary(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -53,7 +54,7 @@ func (h *Handler) Summary(c echo.Context) error {
 	return response.OK(c, s)
 }
 
-// GET /dashboard/transactions/trend?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+// GET /metrics/trend?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
 // Default: last 7 days.
 func (h *Handler) Trend(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
@@ -89,7 +90,7 @@ func (h *Handler) Trend(c echo.Context) error {
 	return response.OK(c, trend)
 }
 
-// GET /dashboard/products/top?period=&limit=10
+// GET /metrics/top-products?period=&limit=10
 func (h *Handler) TopProducts(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {
@@ -121,7 +122,7 @@ func (h *Handler) TopProducts(c echo.Context) error {
 	return response.OK(c, products)
 }
 
-// GET /dashboard/transactions/peak-hours?period=this_week|this_month|last_month
+// GET /metrics/peak-hours?period=this_week|this_month|last_month
 func (h *Handler) PeakHours(c echo.Context) error {
 	businessID, err := businessIDFromCtx(c)
 	if err != nil {

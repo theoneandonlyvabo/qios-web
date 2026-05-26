@@ -465,7 +465,7 @@ func (r *PostgresRepository) ListTransactions(ctx context.Context, f AdminListTr
 
 	var total int
 	if err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM pos_orders `+where, args...,
+		`SELECT COUNT(*) FROM orders `+where, args...,
 	).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("admin: count transactions: %w", err)
 	}
@@ -475,7 +475,7 @@ func (r *PostgresRepository) ListTransactions(ctx context.Context, f AdminListTr
 
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, business_id, operator_id, order_id, total_amount, payment_method, status, note, paid_at, created_at, updated_at
-		 FROM pos_orders `+where+
+		 FROM orders `+where+
 			fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, idx, idx+1),
 		listArgs...,
 	)
@@ -498,7 +498,7 @@ func (r *PostgresRepository) ListTransactions(ctx context.Context, f AdminListTr
 func (r *PostgresRepository) FindTransactionByID(ctx context.Context, id uuid.UUID) (*AdminTransaction, error) {
 	t, err := scanAdminTransaction(r.db.QueryRowContext(ctx,
 		`SELECT id, business_id, operator_id, order_id, total_amount, payment_method, status, note, paid_at, created_at, updated_at
-		 FROM pos_orders WHERE id = $1`, id,
+		 FROM orders WHERE id = $1`, id,
 	))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrTransactionNotFound
@@ -511,7 +511,7 @@ func (r *PostgresRepository) FindTransactionByID(ctx context.Context, id uuid.UU
 
 func (r *PostgresRepository) VoidTransaction(ctx context.Context, id uuid.UUID) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE pos_orders SET status='VOIDED', updated_at=NOW()
+		`UPDATE orders SET status='VOIDED', updated_at=NOW()
 		 WHERE id=$1 AND status='CONFIRMED'`, id,
 	)
 	if err != nil {
@@ -520,7 +520,7 @@ func (r *PostgresRepository) VoidTransaction(ctx context.Context, id uuid.UUID) 
 	n, _ := res.RowsAffected()
 	if n == 0 {
 		var exists bool
-		_ = r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pos_orders WHERE id=$1)`, id).Scan(&exists)
+		_ = r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM orders WHERE id=$1)`, id).Scan(&exists)
 		if !exists {
 			return ErrTransactionNotFound
 		}

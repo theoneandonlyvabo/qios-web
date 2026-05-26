@@ -8,7 +8,7 @@ import (
 )
 
 func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc) {
-	g := e.Group("/products", authMiddleware)
+	g := e.Group("/products", authMiddleware, appmiddleware.RateLimitOwner)
 
 	// Owner + operator dapat list dan baca detail
 	g.GET("", h.List, appmiddleware.RequireOperator)

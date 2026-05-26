@@ -17,13 +17,10 @@ import (
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/config"
 	adminpkg "github.com/theoneandonlyvabo/qios-web/apps/server/api/core/admin"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/analytics"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/auth"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/dashboard"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/insight"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/pos"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/metrics"
+	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/order"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/product"
-	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/report"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/transaction"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/core/user"
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/database"
@@ -95,6 +92,11 @@ func main() {
 
 	// Recover harus pertama — tangkap panic dari semua handler termasuk /health.
 	e.Use(echomiddleware.Recover())
+	e.Use(echomiddleware.BodyLimit("2M"))
+	e.Use(echomiddleware.TimeoutWithConfig(echomiddleware.TimeoutConfig{
+		Timeout: 30 * time.Second,
+	}))
+	e.IPExtractor = echo.ExtractIPFromXFFHeader()
 	e.Use(applogger.Middleware())
 	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
 		XSSProtection:         "1; mode=block",
@@ -112,15 +114,17 @@ func main() {
 
 	e.Use(echoprometheus.NewMiddleware("qios"))
 	e.GET("/metrics", echoprometheus.NewHandler(), metricsGuard())
-	e.GET("/health", func(c echo.Context) error {
-		if err := db.Ping(); err != nil {
-			return c.JSON(http.StatusServiceUnavailable, map[string]string{
-				"status": "unhealthy",
-				"error":  "database unreachable",
-			})
-		}
+	e.GET("/livez", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
+	readyz := func(c echo.Context) error {
+		if err := db.PingContext(c.Request().Context()); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "db_unreachable"})
+		}
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	}
+	e.GET("/readyz", readyz)
+	e.GET("/health", readyz) // alias for /readyz — remove once infra confirms unused
 
 	authMiddleware := appmiddleware.RequireAuth(jwtSvc)
 
@@ -133,9 +137,9 @@ func main() {
 	userSvc := user.NewService(userRepo, userPlan)
 	user.RegisterRoutes(e, user.NewHandler(userSvc), authMiddleware)
 
-	posRepo := pos.NewPostgresRepository(db)
-	posSvc := pos.NewService(posRepo)
-	pos.RegisterRoutes(e, pos.NewHandler(posSvc), authMiddleware)
+	orderRepo := order.NewPostgresRepository(db)
+	orderSvc := order.NewService(orderRepo)
+	order.RegisterRoutes(e, order.NewHandler(orderSvc), authMiddleware)
 
 	productRepo := product.NewPostgresRepository(db)
 	productSvc := product.NewService(productRepo)
@@ -145,10 +149,7 @@ func main() {
 	transactionSvc := transaction.NewService(transactionRepo)
 	transaction.RegisterRoutes(e, transaction.NewHandler(transactionSvc), authMiddleware)
 
-	dashboard.RegisterRoutes(e, dashboard.NewHandler(dashboard.NewQueries(db)), authMiddleware)
-	analytics.RegisterRoutes(e, db, authMiddleware)
-	report.RegisterRoutes(e, db, authMiddleware)
-	insight.RegisterRoutes(e, db, authMiddleware)
+	metrics.RegisterRoutes(e, metrics.NewHandler(metrics.NewQueries(db)), authMiddleware)
 
 	adminRepo := adminpkg.NewPostgresRepository(db)
 	adminSvc := adminpkg.NewService(adminRepo, jwtSvc)
