@@ -15,8 +15,8 @@ var adminLoginRateLimiter = echomiddleware.RateLimiter(
 func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc) {
 	// Public auth routes — tidak butuh JWT
 	e.POST("/admin/auth/login", h.Login, adminLoginRateLimiter)
-	e.POST("/admin/auth/refresh", h.Refresh)
-	e.POST("/admin/auth/logout", h.Logout)
+	e.POST("/admin/auth/refresh", h.Refresh, adminLoginRateLimiter)
+	e.POST("/admin/auth/logout", h.Logout, adminLoginRateLimiter)
 
 	// Protected routes — butuh JWT role=admin
 	g := e.Group("/admin", authMiddleware, appmiddleware.RequireAdmin, appmiddleware.RateLimitAdmin)

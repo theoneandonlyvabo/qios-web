@@ -327,9 +327,11 @@ func (r *PostgresRepository) SoftDeleteOperator(ctx context.Context, id uuid.UUI
 }
 
 func (r *PostgresRepository) RegenerateOperatorQR(ctx context.Context, id uuid.UUID, newToken string) error {
+	// qr_token_revoked_at is set to NOW() first so that any in-flight login
+	// using the old QR token is rejected, then the token is replaced atomically.
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE operators
-		 SET qr_token = $1, updated_at = NOW()
+		 SET qr_token = $1, qr_token_revoked_at = NULL, updated_at = NOW()
 		 WHERE id = $2 AND deleted_at IS NULL`,
 		newToken, id,
 	)

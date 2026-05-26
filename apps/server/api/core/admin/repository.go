@@ -46,6 +46,9 @@ type Repository interface {
 	ListTransactions(ctx context.Context, f AdminListTransactionsFilter) ([]*AdminTransaction, int, error)
 	FindTransactionByID(ctx context.Context, id uuid.UUID) (*AdminTransaction, error)
 	VoidTransaction(ctx context.Context, id uuid.UUID) error
+
+	// Audit
+	WriteAuditLog(ctx context.Context, adminID uuid.UUID, targetType string, targetID *uuid.UUID, action string) error
 }
 
 type PostgresRepository struct {
@@ -527,6 +530,15 @@ func (r *PostgresRepository) VoidTransaction(ctx context.Context, id uuid.UUID) 
 		return ErrTransactionNotPending
 	}
 	return nil
+}
+
+func (r *PostgresRepository) WriteAuditLog(ctx context.Context, adminID uuid.UUID, targetType string, targetID *uuid.UUID, action string) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO admin_audit_logs (admin_id, target_type, target_id, action)
+		 VALUES ($1, $2, $3, $4)`,
+		adminID, targetType, targetID, action,
+	)
+	return err
 }
 
 func isUniqueViolation(err error) bool {

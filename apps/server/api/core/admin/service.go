@@ -28,19 +28,19 @@ type Service interface {
 	Me(ctx context.Context, adminID uuid.UUID) (*AdminResponse, error)
 
 	ListBusinesses(ctx context.Context) ([]*Business, error)
-	CreateBusiness(ctx context.Context, req CreateBusinessRequest) (*Business, error)
+	CreateBusiness(ctx context.Context, adminID uuid.UUID, req CreateBusinessRequest) (*Business, error)
 	GetBusiness(ctx context.Context, id uuid.UUID) (*Business, error)
-	UpdateBusiness(ctx context.Context, id uuid.UUID, req UpdateBusinessRequest) (*Business, error)
+	UpdateBusiness(ctx context.Context, adminID, id uuid.UUID, req UpdateBusinessRequest) (*Business, error)
 
 	ListProducts(ctx context.Context, businessID uuid.UUID) ([]*AdminProduct, error)
-	CreateProduct(ctx context.Context, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error)
-	UpdateProduct(ctx context.Context, productID uuid.UUID, req AdminUpdateProductRequest) (*AdminProduct, error)
-	DeleteProduct(ctx context.Context, productID uuid.UUID) error
+	CreateProduct(ctx context.Context, adminID, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error)
+	UpdateProduct(ctx context.Context, adminID, productID uuid.UUID, req AdminUpdateProductRequest) (*AdminProduct, error)
+	DeleteProduct(ctx context.Context, adminID, productID uuid.UUID) error
 
-	DeleteOperator(ctx context.Context, businessID, operatorID uuid.UUID) error
+	DeleteOperator(ctx context.Context, adminID, businessID, operatorID uuid.UUID) error
 
 	ListTransactions(ctx context.Context, f AdminListTransactionsFilter) (*AdminListTransactionsResult, error)
-	VoidTransaction(ctx context.Context, transactionID uuid.UUID) error
+	VoidTransaction(ctx context.Context, adminID, transactionID uuid.UUID) error
 }
 
 type service struct {
@@ -148,15 +148,20 @@ func (s *service) ListBusinesses(ctx context.Context) ([]*Business, error) {
 	return s.repo.ListBusinesses(ctx)
 }
 
-func (s *service) CreateBusiness(ctx context.Context, req CreateBusinessRequest) (*Business, error) {
-	return s.repo.CreateBusiness(ctx, req)
+func (s *service) CreateBusiness(ctx context.Context, adminID uuid.UUID, req CreateBusinessRequest) (*Business, error) {
+	b, err := s.repo.CreateBusiness(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "business", &b.ID, "create_business")
+	return b, nil
 }
 
 func (s *service) GetBusiness(ctx context.Context, id uuid.UUID) (*Business, error) {
 	return s.repo.FindBusinessByID(ctx, id)
 }
 
-func (s *service) UpdateBusiness(ctx context.Context, id uuid.UUID, req UpdateBusinessRequest) (*Business, error) {
+func (s *service) UpdateBusiness(ctx context.Context, adminID, id uuid.UUID, req UpdateBusinessRequest) (*Business, error) {
 	b, err := s.repo.FindBusinessByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -184,6 +189,7 @@ func (s *service) UpdateBusiness(ctx context.Context, id uuid.UUID, req UpdateBu
 	if err := s.repo.UpdateBusiness(ctx, b); err != nil {
 		return nil, err
 	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "business", &b.ID, "update_business")
 	return b, nil
 }
 
@@ -191,11 +197,16 @@ func (s *service) ListProducts(ctx context.Context, businessID uuid.UUID) ([]*Ad
 	return s.repo.ListProductsByBusiness(ctx, businessID)
 }
 
-func (s *service) CreateProduct(ctx context.Context, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error) {
-	return s.repo.CreateProduct(ctx, businessID, req)
+func (s *service) CreateProduct(ctx context.Context, adminID, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error) {
+	p, err := s.repo.CreateProduct(ctx, businessID, req)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "product", &p.ID, "create_product")
+	return p, nil
 }
 
-func (s *service) UpdateProduct(ctx context.Context, productID uuid.UUID, req AdminUpdateProductRequest) (*AdminProduct, error) {
+func (s *service) UpdateProduct(ctx context.Context, adminID, productID uuid.UUID, req AdminUpdateProductRequest) (*AdminProduct, error) {
 	p, err := s.repo.FindProductByID(ctx, productID)
 	if err != nil {
 		return nil, err
@@ -220,15 +231,24 @@ func (s *service) UpdateProduct(ctx context.Context, productID uuid.UUID, req Ad
 	if err := s.repo.UpdateProduct(ctx, p); err != nil {
 		return nil, fmt.Errorf("admin service: update product: %w", err)
 	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "product", &p.ID, "update_product")
 	return p, nil
 }
 
-func (s *service) DeleteProduct(ctx context.Context, productID uuid.UUID) error {
-	return s.repo.SoftDeleteProduct(ctx, productID)
+func (s *service) DeleteProduct(ctx context.Context, adminID, productID uuid.UUID) error {
+	if err := s.repo.SoftDeleteProduct(ctx, productID); err != nil {
+		return err
+	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "product", &productID, "delete_product")
+	return nil
 }
 
-func (s *service) DeleteOperator(ctx context.Context, businessID, operatorID uuid.UUID) error {
-	return s.repo.DeleteOperator(ctx, businessID, operatorID)
+func (s *service) DeleteOperator(ctx context.Context, adminID, businessID, operatorID uuid.UUID) error {
+	if err := s.repo.DeleteOperator(ctx, businessID, operatorID); err != nil {
+		return err
+	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "operator", &operatorID, "delete_operator")
+	return nil
 }
 
 func (s *service) ListTransactions(ctx context.Context, f AdminListTransactionsFilter) (*AdminListTransactionsResult, error) {
@@ -247,8 +267,12 @@ func (s *service) ListTransactions(ctx context.Context, f AdminListTransactionsF
 	}, nil
 }
 
-func (s *service) VoidTransaction(ctx context.Context, id uuid.UUID) error {
-	return s.repo.VoidTransaction(ctx, id)
+func (s *service) VoidTransaction(ctx context.Context, adminID, id uuid.UUID) error {
+	if err := s.repo.VoidTransaction(ctx, id); err != nil {
+		return err
+	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "transaction", &id, "void_transaction")
+	return nil
 }
 
 func generateToken() (plain, hashed string, err error) {

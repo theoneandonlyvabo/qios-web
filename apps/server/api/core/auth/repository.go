@@ -159,12 +159,13 @@ func (r *PostgresRepository) FindOperatorByCode(ctx context.Context, businessID 
 }
 
 // FindOperatorByQRToken mengambil data login operator via qr_token global.
+// Returns ErrInvalidCredentials if the token has been revoked (qr_token_revoked_at IS NOT NULL).
 func (r *PostgresRepository) FindOperatorByQRToken(ctx context.Context, token string) (*OperatorLoginData, error) {
 	var op OperatorLoginData
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, business_id, password_hash, is_active, name, operator_code, created_at, updated_at
 		 FROM operators
-		 WHERE qr_token = $1 AND deleted_at IS NULL`,
+		 WHERE qr_token = $1 AND deleted_at IS NULL AND qr_token_revoked_at IS NULL`,
 		token,
 	).Scan(&op.ID, &op.BusinessID, &op.PasswordHash, &op.IsActive, &op.Name, &op.OperatorCode, &op.CreatedAt, &op.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
