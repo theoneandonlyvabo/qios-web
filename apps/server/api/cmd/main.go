@@ -107,8 +107,8 @@ func main() {
 	}))
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOrigins:     strings.Split(cfg.CORSAllowedOrigins, ","),
-		AllowMethods:     []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Content-Type", "Authorization", "X-Admin-Key"},
 		AllowCredentials: true,
 	}))
 
@@ -151,9 +151,10 @@ func main() {
 
 	metrics.RegisterRoutes(e, metrics.NewHandler(metrics.NewQueries(db)), authMiddleware)
 
+	requireAdminKey := appmiddleware.RequireAdminKey(cfg.AdminAPIKey)
 	adminRepo := adminpkg.NewPostgresRepository(db)
-	adminSvc := adminpkg.NewService(adminRepo, jwtSvc)
-	adminpkg.RegisterRoutes(e, adminpkg.NewHandler(adminSvc), authMiddleware)
+	adminSvc := adminpkg.NewService(adminRepo)
+	adminpkg.RegisterRoutes(e, adminpkg.NewHandler(adminSvc), requireAdminKey)
 
 	go func() {
 		applogger.Info("server starting on port %s", cfg.AppPort)

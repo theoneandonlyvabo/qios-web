@@ -8,10 +8,10 @@ package admin
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -19,24 +19,24 @@ import (
 )
 
 type Repository interface {
-	// Auth
-	FindAdminByEmail(ctx context.Context, email string) (*AdminUser, error)
-	FindAdminByID(ctx context.Context, id uuid.UUID) (*AdminUser, error)
-	StoreAdminRefreshToken(ctx context.Context, adminID uuid.UUID, tokenHash string, expiry time.Duration) error
-	FindAdminRefreshToken(ctx context.Context, tokenHash string) (adminID uuid.UUID, expiresAt time.Time, err error)
-	DeleteAdminRefreshToken(ctx context.Context, tokenHash string) error
+	// Owner
+	ListOwners(ctx context.Context, page, limit int) ([]*OwnerSummary, int, error)
+	FindOwnerByID(ctx context.Context, businessID uuid.UUID) (*OwnerDetail, error)
+	SetOwnerStatus(ctx context.Context, businessID uuid.UUID, suspended bool) error
+	SetOwnerCredential(ctx context.Context, businessID uuid.UUID, email *string, passwordHash string) error
 
-	// Business
-	ListBusinesses(ctx context.Context) ([]*Business, error)
-	FindBusinessByID(ctx context.Context, id uuid.UUID) (*Business, error)
+	// Business (create/update tetap pakai business-centric)
 	CreateBusiness(ctx context.Context, req CreateBusinessRequest) (*Business, error)
+	FindBusinessByID(ctx context.Context, id uuid.UUID) (*Business, error)
 	UpdateBusiness(ctx context.Context, b *Business) error
 
 	// Product
 	ListProductsByBusiness(ctx context.Context, businessID uuid.UUID) ([]*AdminProduct, error)
 	FindProductByID(ctx context.Context, id uuid.UUID) (*AdminProduct, error)
+	FindProductDetailByID(ctx context.Context, id uuid.UUID) (*AdminProductDetail, error)
 	CreateProduct(ctx context.Context, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error)
 	UpdateProduct(ctx context.Context, p *AdminProduct) error
+	UpdateProductRecipe(ctx context.Context, id uuid.UUID, recipe json.RawMessage) error
 	SoftDeleteProduct(ctx context.Context, id uuid.UUID) error
 
 	// Operator
@@ -57,77 +57,153 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 }
 
 // ----------------------------------------------------------------
-// Auth
+// Owner
 // ----------------------------------------------------------------
 
-func (r *PostgresRepository) FindAdminByEmail(ctx context.Context, email string) (*AdminUser, error) {
-	var a AdminUser
-	err := r.db.QueryRowContext(ctx,
-		`SELECT id, email, password_hash, full_name, is_active, created_at, updated_at
-		 FROM admin_users WHERE email = $1`,
-		email,
-	).Scan(&a.ID, &a.Email, &a.PasswordHash, &a.FullName, &a.IsActive, &a.CreatedAt, &a.UpdatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrInvalidCredentials
+func (r *PostgresRepository) ListOwners(ctx context.Context, page, limit int) ([]*OwnerSummary, int, error) {
+	if page < 1 {
+		page = 1
 	}
-	if err != nil {
-		return nil, fmt.Errorf("admin: find by email: %w", err)
+	if limit < 1 || limit > 100 {
+		limit = 20
 	}
-	return &a, nil
-}
 
-func (r *PostgresRepository) FindAdminByID(ctx context.Context, id uuid.UUID) (*AdminUser, error) {
-	var a AdminUser
-	err := r.db.QueryRowContext(ctx,
-		`SELECT id, email, password_hash, full_name, is_active, created_at, updated_at
-		 FROM admin_users WHERE id = $1`,
-		id,
-	).Scan(&a.ID, &a.Email, &a.PasswordHash, &a.FullName, &a.IsActive, &a.CreatedAt, &a.UpdatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrAdminNotFound
+	var total int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM businesses`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("admin: count owners: %w", err)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("admin: find by id: %w", err)
-	}
-	return &a, nil
-}
 
-func (r *PostgresRepository) StoreAdminRefreshToken(ctx context.Context, adminID uuid.UUID, tokenHash string, expiry time.Duration) error {
-	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO admin_refresh_tokens (admin_id, token_hash, expires_at)
-		 VALUES ($1, $2, $3)`,
-		adminID, tokenHash, time.Now().Add(expiry),
+	offset := (page - 1) * limit
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT b.id, u.id, b.qios_id, u.email, u.full_name,
+		        b.business_name, b.merchant_status,
+		        u.is_active, u.is_suspended, b.created_at
+		 FROM businesses b JOIN users u ON u.id = b.user_id
+		 ORDER BY b.created_at DESC
+		 LIMIT $1 OFFSET $2`,
+		limit, offset,
 	)
 	if err != nil {
-		return fmt.Errorf("admin: store refresh token: %w", err)
+		return nil, 0, fmt.Errorf("admin: list owners: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*OwnerSummary
+	for rows.Next() {
+		var o OwnerSummary
+		if err := rows.Scan(
+			&o.BusinessID, &o.UserID, &o.QiosID, &o.Email, &o.FullName,
+			&o.BusinessName, &o.MerchantStatus,
+			&o.IsActive, &o.IsSuspended, &o.CreatedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("admin: scan owner: %w", err)
+		}
+		out = append(out, &o)
+	}
+	return out, total, rows.Err()
+}
+
+func (r *PostgresRepository) FindOwnerByID(ctx context.Context, businessID uuid.UUID) (*OwnerDetail, error) {
+	var o OwnerDetail
+	var phone, address, city, country, qrisString sql.NullString
+	err := r.db.QueryRowContext(ctx,
+		`SELECT b.id, u.id, b.qios_id, u.email, u.full_name,
+		        b.business_name, b.phone, b.address, b.city, b.country,
+		        b.qris_string, b.merchant_status,
+		        u.is_active, u.is_suspended, b.created_at, b.updated_at
+		 FROM businesses b JOIN users u ON u.id = b.user_id
+		 WHERE b.id = $1`,
+		businessID,
+	).Scan(
+		&o.BusinessID, &o.UserID, &o.QiosID, &o.Email, &o.FullName,
+		&o.BusinessName, &phone, &address, &city, &country,
+		&qrisString, &o.MerchantStatus,
+		&o.IsActive, &o.IsSuspended, &o.CreatedAt, &o.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrOwnerNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("admin: find owner: %w", err)
+	}
+	if phone.Valid {
+		o.Phone = &phone.String
+	}
+	if address.Valid {
+		o.Address = &address.String
+	}
+	if city.Valid {
+		o.City = &city.String
+	}
+	if country.Valid {
+		o.Country = &country.String
+	}
+	if qrisString.Valid {
+		o.QrisString = &qrisString.String
+	}
+	return &o, nil
+}
+
+// SetOwnerStatus update is_suspended di users dan merchant_status di businesses secara atomik.
+func (r *PostgresRepository) SetOwnerStatus(ctx context.Context, businessID uuid.UUID, suspended bool) error {
+	merchantStatus := "ACTIVE"
+	if suspended {
+		merchantStatus = "SUSPENDED"
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("admin: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx,
+		`UPDATE users u SET is_suspended = $1, updated_at = NOW()
+		 FROM businesses b WHERE b.id = $2 AND u.id = b.user_id`,
+		suspended, businessID,
+	)
+	if err != nil {
+		return fmt.Errorf("admin: update user status: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrOwnerNotFound
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE businesses SET merchant_status = $1, updated_at = NOW() WHERE id = $2`,
+		merchantStatus, businessID,
+	); err != nil {
+		return fmt.Errorf("admin: update business status: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// SetOwnerCredential update email (opsional) dan password_hash di tabel users.
+func (r *PostgresRepository) SetOwnerCredential(ctx context.Context, businessID uuid.UUID, email *string, passwordHash string) error {
+	var err error
+	if email != nil {
+		normalized := strings.ToLower(strings.TrimSpace(*email))
+		_, err = r.db.ExecContext(ctx,
+			`UPDATE users u SET email = $1, password_hash = $2, updated_at = NOW()
+			 FROM businesses b WHERE b.id = $3 AND u.id = b.user_id`,
+			normalized, passwordHash, businessID,
+		)
+	} else {
+		_, err = r.db.ExecContext(ctx,
+			`UPDATE users u SET password_hash = $1, updated_at = NOW()
+			 FROM businesses b WHERE b.id = $2 AND u.id = b.user_id`,
+			passwordHash, businessID,
+		)
+	}
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrEmailTaken
+		}
+		return fmt.Errorf("admin: set credential: %w", err)
 	}
 	return nil
-}
-
-func (r *PostgresRepository) FindAdminRefreshToken(ctx context.Context, tokenHash string) (uuid.UUID, time.Time, error) {
-	var (
-		adminID   uuid.UUID
-		expiresAt time.Time
-	)
-	err := r.db.QueryRowContext(ctx,
-		`SELECT admin_id, expires_at FROM admin_refresh_tokens WHERE token_hash = $1`,
-		tokenHash,
-	).Scan(&adminID, &expiresAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return uuid.Nil, time.Time{}, ErrRefreshNotFound
-	}
-	if err != nil {
-		return uuid.Nil, time.Time{}, fmt.Errorf("admin: find refresh token: %w", err)
-	}
-	return adminID, expiresAt, nil
-}
-
-func (r *PostgresRepository) DeleteAdminRefreshToken(ctx context.Context, tokenHash string) error {
-	_, err := r.db.ExecContext(ctx,
-		`DELETE FROM admin_refresh_tokens WHERE token_hash = $1`,
-		tokenHash,
-	)
-	return err
 }
 
 // ----------------------------------------------------------------
@@ -164,26 +240,6 @@ func scanBusiness(row interface{ Scan(...any) error }) (*Business, error) {
 		b.QrisString = &qrisString.String
 	}
 	return &b, nil
-}
-
-func (r *PostgresRepository) ListBusinesses(ctx context.Context) ([]*Business, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT `+businessCols+` FROM businesses ORDER BY created_at DESC`,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("admin: list businesses: %w", err)
-	}
-	defer rows.Close()
-
-	var out []*Business
-	for rows.Next() {
-		b, err := scanBusiness(rows)
-		if err != nil {
-			return nil, fmt.Errorf("admin: scan business: %w", err)
-		}
-		out = append(out, b)
-	}
-	return out, rows.Err()
 }
 
 func (r *PostgresRepository) FindBusinessByID(ctx context.Context, id uuid.UUID) (*Business, error) {
@@ -229,19 +285,18 @@ func (r *PostgresRepository) CreateBusiness(ctx context.Context, req CreateBusin
 
 	var nextSeq int
 	if err := tx.QueryRowContext(ctx, `SELECT nextval('qios_id_seq')`).Scan(&nextSeq); err != nil {
-		tx.Rollback()
 		return nil, fmt.Errorf("admin: generate qios_id: %w", err)
 	}
 	qiosID := fmt.Sprintf("QIOS-%06d", nextSeq)
 
 	b := &Business{
-		UserID:       userID,
-		QiosID:       qiosID,
-		BusinessName: req.BusinessName,
-		Phone:        req.Phone,
-		Address:      req.Address,
-		City:         req.City,
-		Country:      req.Country,
+		UserID:         userID,
+		QiosID:         qiosID,
+		BusinessName:   req.BusinessName,
+		Phone:          req.Phone,
+		Address:        req.Address,
+		City:           req.City,
+		Country:        req.Country,
 		MerchantStatus: "PENDING",
 	}
 
@@ -334,6 +389,40 @@ func (r *PostgresRepository) FindProductByID(ctx context.Context, id uuid.UUID) 
 	return p, nil
 }
 
+func (r *PostgresRepository) FindProductDetailByID(ctx context.Context, id uuid.UUID) (*AdminProductDetail, error) {
+	var p AdminProductDetail
+	var category, description sql.NullString
+	var recipeRaw []byte
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, business_id, name, price, category, description,
+		        is_available, recipe, created_at, updated_at
+		 FROM products WHERE id = $1 AND deleted_at IS NULL`, id,
+	).Scan(
+		&p.ID, &p.BusinessID, &p.Name, &p.Price,
+		&category, &description, &p.IsAvailable,
+		&recipeRaw, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrProductNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("admin: find product detail: %w", err)
+	}
+	if category.Valid {
+		p.Category = &category.String
+	}
+	if description.Valid {
+		p.Description = &description.String
+	}
+	if len(recipeRaw) > 0 && string(recipeRaw) != "null" {
+		_ = json.Unmarshal(recipeRaw, &p.Recipe)
+	}
+	if p.Recipe == nil {
+		p.Recipe = []Ingredient{}
+	}
+	return &p, nil
+}
+
 func (r *PostgresRepository) CreateProduct(ctx context.Context, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error) {
 	isAvailable := true
 	if req.IsAvailable != nil {
@@ -370,6 +459,22 @@ func (r *PostgresRepository) UpdateProduct(ctx context.Context, p *AdminProduct)
 	)
 	if err != nil {
 		return fmt.Errorf("admin: update product: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresRepository) UpdateProductRecipe(ctx context.Context, id uuid.UUID, recipe json.RawMessage) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE products SET recipe = $1::jsonb, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL`,
+		[]byte(recipe), id,
+	)
+	if err != nil {
+		return fmt.Errorf("admin: update recipe: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrProductNotFound
 	}
 	return nil
 }
@@ -529,6 +634,10 @@ func (r *PostgresRepository) VoidTransaction(ctx context.Context, id uuid.UUID) 
 	return nil
 }
 
+// ----------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------
+
 func isUniqueViolation(err error) bool {
 	var pqErr *pq.Error
 	if errors.As(err, &pqErr) {
@@ -536,3 +645,4 @@ func isUniqueViolation(err error) bool {
 	}
 	return false
 }
+

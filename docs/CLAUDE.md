@@ -51,7 +51,7 @@ QIOS bukan POS konvensional dan bukan sekadar tools pencatatan. QIOS menggantika
 
 **Operator** — kasir/pegawai, akses terbatas ke PWA operator saja. Login via QR scan atau `operator_code` + password. Dibuat dan dikelola oleh owner dari dashboard. Tidak support Google OAuth.
 
-**Admin (Skalar Staff)** — pengelola platform, akses ke admin panel untuk onboarding merchant, manage produk dan resep per merchant, assign plan, monitor transaksi cross-merchant, dan remove operator on request. Login via endpoint terpisah dengan JWT scope `admin`.
+**Admin (Skalar Staff)** — pengelola platform, akses ke admin panel (`qios-admin`, Next.js app terpisah) untuk onboarding owner, manage produk dan resep per merchant, monitor transaksi cross-merchant, dan remove operator on request. `qios-admin` autentikasi user internal via Google OAuth di sisinya sendiri. Komunikasi ke backend QIOS via **shared secret** (`ADMIN_API_KEY`) di header `X-Admin-Key` — tidak ada JWT admin di backend.
 
 Satu user (owner) hanya bisa memiliki satu bisnis. Untuk bisnis berbeda, harus menggunakan akun berbeda.
 

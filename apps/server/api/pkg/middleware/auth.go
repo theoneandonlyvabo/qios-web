@@ -97,3 +97,16 @@ func RequireAdmin(next echo.HandlerFunc) echo.HandlerFunc {
 		return next(c)
 	}
 }
+
+// RequireAdminKey verifikasi X-Admin-Key header untuk service-to-service auth.
+// Dipakai oleh admin panel (qios-admin) yang sudah handle Google OAuth di sisinya.
+func RequireAdminKey(apiKey string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if c.Request().Header.Get("X-Admin-Key") != apiKey {
+				return response.Unauthorized(c)
+			}
+			return next(c)
+		}
+	}
+}
