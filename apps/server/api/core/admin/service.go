@@ -8,156 +8,78 @@ package admin
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"strings"
-	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/google/uuid"
-	appjwt "github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/jwt"
 )
 
 type Service interface {
-	Login(ctx context.Context, email, password string) (*LoginResult, error)
-	Refresh(ctx context.Context, refreshTokenPlain string) (*RefreshResult, error)
-	Logout(ctx context.Context, refreshTokenPlain string) error
-	Me(ctx context.Context, adminID uuid.UUID) (*AdminResponse, error)
+	// Owner management
+	ListOwners(ctx context.Context, page, limit int) (*OwnerListResult, error)
+	CreateOwner(ctx context.Context, req CreateBusinessRequest) (*Business, error)
+	GetOwner(ctx context.Context, businessID uuid.UUID) (*OwnerDetail, error)
+	UpdateOwner(ctx context.Context, businessID uuid.UUID, req UpdateBusinessRequest) (*Business, error)
+	SetOwnerStatus(ctx context.Context, businessID uuid.UUID, enabled bool) error
+	SetOwnerCredential(ctx context.Context, businessID uuid.UUID, req SetOwnerCredentialRequest) error
 
-	ListBusinesses(ctx context.Context) ([]*Business, error)
-	CreateBusiness(ctx context.Context, req CreateBusinessRequest) (*Business, error)
-	GetBusiness(ctx context.Context, id uuid.UUID) (*Business, error)
-	UpdateBusiness(ctx context.Context, id uuid.UUID, req UpdateBusinessRequest) (*Business, error)
-
+	// Product management
 	ListProducts(ctx context.Context, businessID uuid.UUID) ([]*AdminProduct, error)
 	CreateProduct(ctx context.Context, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error)
+	GetProduct(ctx context.Context, productID uuid.UUID) (*AdminProductDetail, error)
 	UpdateProduct(ctx context.Context, productID uuid.UUID, req AdminUpdateProductRequest) (*AdminProduct, error)
+	UpdateProductRecipe(ctx context.Context, productID uuid.UUID, req UpdateRecipeRequest) error
 	DeleteProduct(ctx context.Context, productID uuid.UUID) error
 
+	// Operator management
 	DeleteOperator(ctx context.Context, businessID, operatorID uuid.UUID) error
 
+	// Transaction management
 	ListTransactions(ctx context.Context, f AdminListTransactionsFilter) (*AdminListTransactionsResult, error)
 	VoidTransaction(ctx context.Context, transactionID uuid.UUID) error
 }
 
 type service struct {
-	repo   Repository
-	jwtSvc *appjwt.Service
+	repo Repository
 }
 
-func NewService(repo Repository, jwtSvc *appjwt.Service) Service {
-	return &service{repo: repo, jwtSvc: jwtSvc}
+func NewService(repo Repository) Service {
+	return &service{repo: repo}
 }
 
-func (s *service) Login(ctx context.Context, email, password string) (*LoginResult, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
+// ----------------------------------------------------------------
+// Owner
+// ----------------------------------------------------------------
 
-	admin, err := s.repo.FindAdminByEmail(ctx, email)
+func (s *service) ListOwners(ctx context.Context, page, limit int) (*OwnerListResult, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	owners, total, err := s.repo.ListOwners(ctx, page, limit)
 	if err != nil {
 		return nil, err
 	}
-	if !admin.IsActive {
-		return nil, ErrInvalidCredentials
+	if owners == nil {
+		owners = []*OwnerSummary{}
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte(password)); err != nil {
-		return nil, ErrInvalidCredentials
-	}
-
-	accessToken, err := s.jwtSvc.IssueAccessToken(admin.ID.String(), "", appjwt.RoleAdmin)
-	if err != nil {
-		return nil, fmt.Errorf("admin service: issue token: %w", err)
-	}
-
-	plain, hashed, err := generateToken()
-	if err != nil {
-		return nil, fmt.Errorf("admin service: generate refresh: %w", err)
-	}
-	if err := s.repo.StoreAdminRefreshToken(ctx, admin.ID, hashed, s.jwtSvc.RefreshExpiry()); err != nil {
-		return nil, err
-	}
-
-	return &LoginResult{
-		AccessToken:   accessToken,
-		RefreshToken:  plain,
-		RefreshExpiry: s.jwtSvc.RefreshExpiry(),
-	}, nil
+	return &OwnerListResult{Owners: owners, Total: total, Page: page, Limit: limit}, nil
 }
 
-func (s *service) Refresh(ctx context.Context, plain string) (*RefreshResult, error) {
-	tokenHash := hashToken(plain)
-
-	adminID, expiresAt, err := s.repo.FindAdminRefreshToken(ctx, tokenHash)
-	if err != nil {
-		return nil, err
-	}
-
-	if time.Now().After(expiresAt) {
-		_ = s.repo.DeleteAdminRefreshToken(ctx, tokenHash)
-		return nil, ErrSessionExpired
-	}
-
-	if err := s.repo.DeleteAdminRefreshToken(ctx, tokenHash); err != nil {
-		return nil, err
-	}
-
-	accessToken, err := s.jwtSvc.IssueAccessToken(adminID.String(), "", appjwt.RoleAdmin)
-	if err != nil {
-		return nil, fmt.Errorf("admin service: issue token: %w", err)
-	}
-
-	newPlain, newHashed, err := generateToken()
-	if err != nil {
-		return nil, fmt.Errorf("admin service: generate refresh: %w", err)
-	}
-	if err := s.repo.StoreAdminRefreshToken(ctx, adminID, newHashed, s.jwtSvc.RefreshExpiry()); err != nil {
-		return nil, err
-	}
-
-	return &RefreshResult{
-		AccessToken:   accessToken,
-		RefreshToken:  newPlain,
-		RefreshExpiry: s.jwtSvc.RefreshExpiry(),
-	}, nil
-}
-
-func (s *service) Logout(ctx context.Context, plain string) error {
-	if plain == "" {
-		return nil
-	}
-	return s.repo.DeleteAdminRefreshToken(ctx, hashToken(plain))
-}
-
-func (s *service) Me(ctx context.Context, adminID uuid.UUID) (*AdminResponse, error) {
-	a, err := s.repo.FindAdminByID(ctx, adminID)
-	if err != nil {
-		return nil, err
-	}
-	return &AdminResponse{
-		ID:        a.ID,
-		Email:     a.Email,
-		FullName:  a.FullName,
-		IsActive:  a.IsActive,
-		CreatedAt: a.CreatedAt,
-	}, nil
-}
-
-func (s *service) ListBusinesses(ctx context.Context) ([]*Business, error) {
-	return s.repo.ListBusinesses(ctx)
-}
-
-func (s *service) CreateBusiness(ctx context.Context, req CreateBusinessRequest) (*Business, error) {
+func (s *service) CreateOwner(ctx context.Context, req CreateBusinessRequest) (*Business, error) {
 	return s.repo.CreateBusiness(ctx, req)
 }
 
-func (s *service) GetBusiness(ctx context.Context, id uuid.UUID) (*Business, error) {
-	return s.repo.FindBusinessByID(ctx, id)
+func (s *service) GetOwner(ctx context.Context, businessID uuid.UUID) (*OwnerDetail, error) {
+	return s.repo.FindOwnerByID(ctx, businessID)
 }
 
-func (s *service) UpdateBusiness(ctx context.Context, id uuid.UUID, req UpdateBusinessRequest) (*Business, error) {
-	b, err := s.repo.FindBusinessByID(ctx, id)
+func (s *service) UpdateOwner(ctx context.Context, businessID uuid.UUID, req UpdateBusinessRequest) (*Business, error) {
+	b, err := s.repo.FindBusinessByID(ctx, businessID)
 	if err != nil {
 		return nil, err
 	}
@@ -187,12 +109,32 @@ func (s *service) UpdateBusiness(ctx context.Context, id uuid.UUID, req UpdateBu
 	return b, nil
 }
 
+func (s *service) SetOwnerStatus(ctx context.Context, businessID uuid.UUID, enabled bool) error {
+	return s.repo.SetOwnerStatus(ctx, businessID, !enabled) // suspended = !enabled
+}
+
+func (s *service) SetOwnerCredential(ctx context.Context, businessID uuid.UUID, req SetOwnerCredentialRequest) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("admin service: hash password: %w", err)
+	}
+	return s.repo.SetOwnerCredential(ctx, businessID, req.Email, string(hash))
+}
+
+// ----------------------------------------------------------------
+// Product
+// ----------------------------------------------------------------
+
 func (s *service) ListProducts(ctx context.Context, businessID uuid.UUID) ([]*AdminProduct, error) {
 	return s.repo.ListProductsByBusiness(ctx, businessID)
 }
 
 func (s *service) CreateProduct(ctx context.Context, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error) {
 	return s.repo.CreateProduct(ctx, businessID, req)
+}
+
+func (s *service) GetProduct(ctx context.Context, productID uuid.UUID) (*AdminProductDetail, error) {
+	return s.repo.FindProductDetailByID(ctx, productID)
 }
 
 func (s *service) UpdateProduct(ctx context.Context, productID uuid.UUID, req AdminUpdateProductRequest) (*AdminProduct, error) {
@@ -223,13 +165,29 @@ func (s *service) UpdateProduct(ctx context.Context, productID uuid.UUID, req Ad
 	return p, nil
 }
 
+func (s *service) UpdateProductRecipe(ctx context.Context, productID uuid.UUID, req UpdateRecipeRequest) error {
+	raw, err := json.Marshal(req.Recipe)
+	if err != nil {
+		return fmt.Errorf("admin service: marshal recipe: %w", err)
+	}
+	return s.repo.UpdateProductRecipe(ctx, productID, json.RawMessage(raw))
+}
+
 func (s *service) DeleteProduct(ctx context.Context, productID uuid.UUID) error {
 	return s.repo.SoftDeleteProduct(ctx, productID)
 }
 
+// ----------------------------------------------------------------
+// Operator
+// ----------------------------------------------------------------
+
 func (s *service) DeleteOperator(ctx context.Context, businessID, operatorID uuid.UUID) error {
 	return s.repo.DeleteOperator(ctx, businessID, operatorID)
 }
+
+// ----------------------------------------------------------------
+// Transaction
+// ----------------------------------------------------------------
 
 func (s *service) ListTransactions(ctx context.Context, f AdminListTransactionsFilter) (*AdminListTransactionsResult, error) {
 	txs, total, err := s.repo.ListTransactions(ctx, f)
@@ -249,20 +207,4 @@ func (s *service) ListTransactions(ctx context.Context, f AdminListTransactionsF
 
 func (s *service) VoidTransaction(ctx context.Context, id uuid.UUID) error {
 	return s.repo.VoidTransaction(ctx, id)
-}
-
-func generateToken() (plain, hashed string, err error) {
-	b := make([]byte, 32)
-	if _, err = rand.Read(b); err != nil {
-		return "", "", err
-	}
-	plain = hex.EncodeToString(b)
-	sum := sha256.Sum256([]byte(plain))
-	hashed = hex.EncodeToString(sum[:])
-	return plain, hashed, nil
-}
-
-func hashToken(plain string) string {
-	sum := sha256.Sum256([]byte(plain))
-	return hex.EncodeToString(sum[:])
 }

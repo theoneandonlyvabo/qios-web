@@ -1,10 +1,9 @@
 // core/admin/model.go
 //
 // Tipe-tipe untuk domain admin:
-//   - AdminUser                    → row di tabel admin_users
-//   - Business                     → row businesses untuk admin view
-//   - AdminProduct                 → row products untuk admin view
-//   - AdminTransaction             → row orders untuk admin view
+//   - OwnerSummary / OwnerDetail  → owner (user+business) untuk admin view
+//   - AdminProduct / AdminProductDetail → product untuk admin view
+//   - AdminTransaction             → order untuk admin view
 //   - Request/Response types untuk semua endpoint admin
 
 package admin
@@ -17,73 +16,89 @@ import (
 )
 
 var (
-	ErrInvalidCredentials    = errors.New("invalid credentials")
-	ErrAdminNotFound         = errors.New("admin not found")
+	ErrOwnerNotFound         = errors.New("owner not found")
 	ErrBusinessNotFound      = errors.New("business not found")
 	ErrProductNotFound       = errors.New("product not found")
 	ErrOperatorNotFound      = errors.New("operator not found")
 	ErrEmailTaken            = errors.New("email already registered")
-	ErrRefreshNotFound       = errors.New("refresh token not found")
-	ErrSessionExpired        = errors.New("session expired")
 	ErrTransactionNotFound   = errors.New("transaction not found")
 	ErrTransactionNotPending = errors.New("transaction is not pending")
 )
 
-// AdminUser — row di tabel admin_users.
-type AdminUser struct {
-	ID           uuid.UUID
-	Email        string
-	PasswordHash string
-	FullName     string
-	IsActive     bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-}
+// ----------------------------------------------------------------
+// Owner
+// ----------------------------------------------------------------
 
-// AdminResponse — shape yang dikembalikan ke client untuk /admin/me.
-type AdminResponse struct {
-	ID        uuid.UUID `json:"id"`
-	Email     string    `json:"email"`
-	FullName  string    `json:"full_name"`
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// LoginRequest — body POST /admin/auth/login.
-type LoginRequest struct {
-	Email    string `json:"email"    validate:"required,email"`
-	Password string `json:"password" validate:"required"`
-}
-
-type LoginResult struct {
-	AccessToken   string
-	RefreshToken  string
-	RefreshExpiry time.Duration
-}
-
-type RefreshResult struct {
-	AccessToken   string
-	RefreshToken  string
-	RefreshExpiry time.Duration
-}
-
-// Business — representasi businesses row untuk admin view.
-type Business struct {
-	ID           uuid.UUID `json:"id"`
-	QiosID       string    `json:"qios_id"`
-	UserID       uuid.UUID `json:"user_id"`
-	BusinessName string    `json:"business_name"`
-	Phone        *string   `json:"phone"`
-	Address      *string   `json:"address"`
-	City         *string   `json:"city"`
-	Country      *string   `json:"country"`
+// OwnerSummary — owner row untuk list (JOIN users+businesses).
+type OwnerSummary struct {
+	BusinessID     uuid.UUID `json:"business_id"`
+	UserID         uuid.UUID `json:"user_id"`
+	QiosID         string    `json:"qios_id"`
+	Email          string    `json:"email"`
+	FullName       string    `json:"full_name"`
+	BusinessName   string    `json:"business_name"`
 	MerchantStatus string    `json:"merchant_status"`
-	QrisString   *string   `json:"qris_string"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	IsActive       bool      `json:"is_active"`
+	IsSuspended    bool      `json:"is_suspended"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
-// CreateBusinessRequest — body POST /admin/businesses.
+// OwnerDetail — detail owner termasuk field bisnis dan user.
+type OwnerDetail struct {
+	BusinessID     uuid.UUID `json:"business_id"`
+	UserID         uuid.UUID `json:"user_id"`
+	QiosID         string    `json:"qios_id"`
+	Email          string    `json:"email"`
+	FullName       string    `json:"full_name"`
+	BusinessName   string    `json:"business_name"`
+	Phone          *string   `json:"phone"`
+	Address        *string   `json:"address"`
+	City           *string   `json:"city"`
+	Country        *string   `json:"country"`
+	QrisString     *string   `json:"qris_string"`
+	MerchantStatus string    `json:"merchant_status"`
+	IsActive       bool      `json:"is_active"`
+	IsSuspended    bool      `json:"is_suspended"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// OwnerListResult — response paginated GET /admin/owners.
+type OwnerListResult struct {
+	Owners []*OwnerSummary `json:"owners"`
+	Total  int             `json:"total"`
+	Page   int             `json:"page"`
+	Limit  int             `json:"limit"`
+}
+
+// SetOwnerStatusRequest — body PATCH /admin/owners/:owner_id/status.
+type SetOwnerStatusRequest struct {
+	Enabled bool `json:"enabled"` // true=aktif, false=suspend
+}
+
+// SetOwnerCredentialRequest — body POST /admin/owners/:owner_id/credential.
+type SetOwnerCredentialRequest struct {
+	Email    *string `json:"email"    validate:"omitempty,email"`
+	Password string  `json:"password" validate:"required,min=6"`
+}
+
+// Business — representasi businesses row untuk admin view (create/update).
+type Business struct {
+	ID             uuid.UUID `json:"id"`
+	QiosID         string    `json:"qios_id"`
+	UserID         uuid.UUID `json:"user_id"`
+	BusinessName   string    `json:"business_name"`
+	Phone          *string   `json:"phone"`
+	Address        *string   `json:"address"`
+	City           *string   `json:"city"`
+	Country        *string   `json:"country"`
+	MerchantStatus string    `json:"merchant_status"`
+	QrisString     *string   `json:"qris_string"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// CreateBusinessRequest — body POST /admin/owners.
 // Membuat user (owner) + business secara atomik.
 type CreateBusinessRequest struct {
 	Email        string  `json:"email"         validate:"required,email"`
@@ -96,17 +111,21 @@ type CreateBusinessRequest struct {
 	Country      *string `json:"country"       validate:"omitempty,max=100"`
 }
 
-// UpdateBusinessRequest — body PATCH /admin/businesses/:business_id.
+// UpdateBusinessRequest — body PATCH /admin/owners/:owner_id.
 type UpdateBusinessRequest struct {
-	BusinessName *string `json:"business_name" validate:"omitempty,min=1,max=255"`
-	Phone        *string `json:"phone"         validate:"omitempty,max=32"`
-	Address      *string `json:"address"`
-	City         *string `json:"city"          validate:"omitempty,max=100"`
-	Country      *string `json:"country"       validate:"omitempty,max=100"`
+	BusinessName   *string `json:"business_name"   validate:"omitempty,min=1,max=255"`
+	Phone          *string `json:"phone"           validate:"omitempty,max=32"`
+	Address        *string `json:"address"`
+	City           *string `json:"city"            validate:"omitempty,max=100"`
+	Country        *string `json:"country"         validate:"omitempty,max=100"`
 	MerchantStatus *string `json:"merchant_status" validate:"omitempty,oneof=PENDING REGISTERED ACTIVE SUSPENDED"`
 }
 
-// AdminProduct — product row untuk admin (tanpa business scoping di lookup).
+// ----------------------------------------------------------------
+// Product
+// ----------------------------------------------------------------
+
+// AdminProduct — product row untuk admin (tanpa recipe).
 type AdminProduct struct {
 	ID          uuid.UUID `json:"id"`
 	BusinessID  uuid.UUID `json:"business_id"`
@@ -120,7 +139,28 @@ type AdminProduct struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// AdminCreateProductRequest — body POST /admin/businesses/:business_id/products.
+// Ingredient — satu bahan baku dalam recipe produk (ADR-005).
+type Ingredient struct {
+	Name     string  `json:"name"`
+	Quantity float64 `json:"qty"`
+	Unit     string  `json:"unit"`
+}
+
+// AdminProductDetail — product row termasuk recipe JSONB.
+type AdminProductDetail struct {
+	ID          uuid.UUID    `json:"id"`
+	BusinessID  uuid.UUID    `json:"business_id"`
+	Name        string       `json:"name"`
+	Price       int64        `json:"price"`
+	Category    *string      `json:"category"`
+	Description *string      `json:"description"`
+	IsAvailable bool         `json:"is_available"`
+	Recipe      []Ingredient `json:"recipe"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+}
+
+// AdminCreateProductRequest — body POST /admin/owners/:owner_id/products.
 type AdminCreateProductRequest struct {
 	Name        string  `json:"name"        validate:"required,min=1,max=255"`
 	Price       int64   `json:"price"       validate:"min=0"`
@@ -137,6 +177,15 @@ type AdminUpdateProductRequest struct {
 	Description *string `json:"description" validate:"omitempty,max=2000"`
 	IsAvailable *bool   `json:"is_available"`
 }
+
+// UpdateRecipeRequest — body PUT /admin/products/:product_id/recipe.
+type UpdateRecipeRequest struct {
+	Recipe []Ingredient `json:"recipe" validate:"required"`
+}
+
+// ----------------------------------------------------------------
+// Transaction
+// ----------------------------------------------------------------
 
 // AdminTransaction — transaction row untuk admin view.
 type AdminTransaction struct {

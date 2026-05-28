@@ -2,41 +2,29 @@
 
 package admin
 
-import (
-	"github.com/labstack/echo/v4"
-	echomiddleware "github.com/labstack/echo/v4/middleware"
-	appmiddleware "github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/middleware"
-)
+import "github.com/labstack/echo/v4"
 
-var adminLoginRateLimiter = echomiddleware.RateLimiter(
-	echomiddleware.NewRateLimiterMemoryStore(10),
-)
+func RegisterRoutes(e *echo.Echo, h *Handler, adminKeyMiddleware echo.MiddlewareFunc) {
+	g := e.Group("/admin", adminKeyMiddleware)
 
-func RegisterRoutes(e *echo.Echo, h *Handler, authMiddleware echo.MiddlewareFunc) {
-	// Public auth routes — tidak butuh JWT
-	e.POST("/admin/auth/login", h.Login, adminLoginRateLimiter)
-	e.POST("/admin/auth/refresh", h.Refresh)
-	e.POST("/admin/auth/logout", h.Logout)
-
-	// Protected routes — butuh JWT role=admin
-	g := e.Group("/admin", authMiddleware, appmiddleware.RequireAdmin, appmiddleware.RateLimitAdmin)
-
-	g.GET("/me", h.Me)
-
-	// Business management
-	g.GET("/businesses", h.ListBusinesses)
-	g.POST("/businesses", h.CreateBusiness)
-	g.GET("/businesses/:business_id", h.GetBusiness)
-	g.PATCH("/businesses/:business_id", h.UpdateBusiness)
+	// Owner management
+	g.GET("/owners", h.ListOwners)
+	g.POST("/owners", h.CreateOwner)
+	g.GET("/owners/:owner_id", h.GetOwner)
+	g.PATCH("/owners/:owner_id", h.UpdateOwner)
+	g.PATCH("/owners/:owner_id/status", h.SetOwnerStatus)
+	g.POST("/owners/:owner_id/credential", h.SetOwnerCredential)
 
 	// Product management
-	g.GET("/businesses/:business_id/products", h.ListProducts)
-	g.POST("/businesses/:business_id/products", h.CreateProduct)
+	g.GET("/owners/:owner_id/products", h.ListOwnerProducts)
+	g.POST("/owners/:owner_id/products", h.CreateProduct)
+	g.GET("/products/:product_id", h.GetProduct)
 	g.PATCH("/products/:product_id", h.UpdateProduct)
 	g.DELETE("/products/:product_id", h.DeleteProduct)
+	g.PUT("/products/:product_id/recipe", h.UpdateProductRecipe)
 
 	// Operator management
-	g.DELETE("/businesses/:business_id/operators/:operator_id", h.DeleteOperator)
+	g.DELETE("/owners/:owner_id/operators/:operator_id", h.DeleteOperator)
 
 	// Transaction management
 	g.GET("/transactions", h.ListTransactions)

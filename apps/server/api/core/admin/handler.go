@@ -1,26 +1,24 @@
 // core/admin/handler.go
 //
-// Layer HTTP untuk domain admin.
-// Handler hanya parsing input, manggil service, dan terjemahkan error ke response.
+// Layer HTTP untuk domain admin (qios-admin panel, service-to-service).
+// Autentikasi via X-Admin-Key header — lihat pkg/middleware.RequireAdminKey.
 //
-// Public routes:
-//   POST /admin/auth/login    → Login
-//   POST /admin/auth/refresh  → Refresh
-//   POST /admin/auth/logout   → Logout
-//
-// Protected routes (RequireAuth + RequireAdmin):
-//   GET  /admin/me                                         → Me
-//   GET  /admin/businesses                                 → ListBusinesses
-//   POST /admin/businesses                                 → CreateBusiness
-//   GET  /admin/businesses/:business_id                    → GetBusiness
-//   PATCH /admin/businesses/:business_id                   → UpdateBusiness
-//   GET  /admin/businesses/:business_id/products           → ListProducts
-//   POST /admin/businesses/:business_id/products           → CreateProduct
-//   PATCH /admin/products/:product_id                      → UpdateProduct
-//   DELETE /admin/products/:product_id                     → DeleteProduct
-//   DELETE /admin/businesses/:business_id/operators/:operator_id → DeleteOperator
-//   GET  /admin/transactions                               → ListTransactions
-//   POST /admin/transactions/:transaction_id/void          → VoidTransaction
+// Routes:
+//   GET    /admin/owners                                    → ListOwners
+//   POST   /admin/owners                                    → CreateOwner
+//   GET    /admin/owners/:owner_id                          → GetOwner
+//   PATCH  /admin/owners/:owner_id                          → UpdateOwner
+//   PATCH  /admin/owners/:owner_id/status                   → SetOwnerStatus
+//   POST   /admin/owners/:owner_id/credential               → SetOwnerCredential
+//   GET    /admin/owners/:owner_id/products                 → ListOwnerProducts
+//   POST   /admin/owners/:owner_id/products                 → CreateProduct
+//   GET    /admin/products/:product_id                      → GetProduct
+//   PATCH  /admin/products/:product_id                      → UpdateProduct
+//   DELETE /admin/products/:product_id                      → DeleteProduct
+//   PUT    /admin/products/:product_id/recipe               → UpdateProductRecipe
+//   DELETE /admin/owners/:owner_id/operators/:operator_id   → DeleteOperator
+//   GET    /admin/transactions                              → ListTransactions
+//   POST   /admin/transactions/:transaction_id/void         → VoidTransaction
 
 package admin
 
@@ -28,15 +26,12 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"github.com/theoneandonlyvabo/qios-web/apps/server/api/pkg/response"
 )
-
-const refreshTokenCookieName = "admin_refresh_token"
 
 type Handler struct {
 	service Service
@@ -47,50 +42,13 @@ func NewHandler(service Service) *Handler {
 }
 
 // ----------------------------------------------------------------
-// Cookie helpers
+// Param helpers
 // ----------------------------------------------------------------
 
-func setRefreshCookie(c echo.Context, plain string, expiry time.Duration) {
-	c.SetCookie(&http.Cookie{
-		Name:     refreshTokenCookieName,
-		Value:    plain,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  time.Now().Add(expiry),
-		Path:     "/",
-	})
-}
-
-func clearRefreshCookie(c echo.Context) {
-	c.SetCookie(&http.Cookie{
-		Name:     refreshTokenCookieName,
-		Value:    "",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  time.Unix(0, 0),
-		Path:     "/",
-	})
-}
-
-// ----------------------------------------------------------------
-// Context helpers
-// ----------------------------------------------------------------
-
-func adminIDFromCtx(c echo.Context) (uuid.UUID, error) {
-	raw, _ := c.Get("user_id").(string)
-	id, err := uuid.Parse(raw)
+func ownerIDParam(c echo.Context) (uuid.UUID, error) {
+	id, err := uuid.Parse(c.Param("owner_id"))
 	if err != nil {
-		return uuid.Nil, errors.New("invalid admin_id in token")
-	}
-	return id, nil
-}
-
-func businessIDParam(c echo.Context) (uuid.UUID, error) {
-	id, err := uuid.Parse(c.Param("business_id"))
-	if err != nil {
-		return uuid.Nil, errors.New("business_id tidak valid")
+		return uuid.Nil, errors.New("owner_id tidak valid")
 	}
 	return id, nil
 }
@@ -121,16 +79,12 @@ func transactionIDParam(c echo.Context) (uuid.UUID, error) {
 
 func mapServiceError(c echo.Context, err error) error {
 	switch {
-	case errors.Is(err, ErrAdminNotFound),
+	case errors.Is(err, ErrOwnerNotFound),
 		errors.Is(err, ErrBusinessNotFound),
 		errors.Is(err, ErrProductNotFound),
 		errors.Is(err, ErrOperatorNotFound),
 		errors.Is(err, ErrTransactionNotFound):
 		return response.NotFound(c)
-	case errors.Is(err, ErrInvalidCredentials), errors.Is(err, ErrRefreshNotFound):
-		return response.Unauthorized(c)
-	case errors.Is(err, ErrSessionExpired):
-		return response.Unauthorized(c)
 	case errors.Is(err, ErrEmailTaken):
 		return response.BadRequest(c, "email already registered")
 	case errors.Is(err, ErrTransactionNotPending):
@@ -144,89 +98,31 @@ func mapServiceError(c echo.Context, err error) error {
 }
 
 // ----------------------------------------------------------------
-// Auth handlers
+// Owner handlers
 // ----------------------------------------------------------------
 
-// POST /admin/auth/login
-func (h *Handler) Login(c echo.Context) error {
-	var req LoginRequest
-	if err := c.Bind(&req); err != nil {
-		return response.BadRequest(c, "invalid request body")
+// GET /admin/owners?page=1&limit=20
+func (h *Handler) ListOwners(c echo.Context) error {
+	page, limit := 1, 20
+	if s := c.QueryParam("page"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n >= 1 {
+			page = n
+		}
 	}
-	if err := c.Validate(&req); err != nil {
-		return response.BadRequest(c, err.Error())
+	if s := c.QueryParam("limit"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n >= 1 && n <= 100 {
+			limit = n
+		}
 	}
-
-	out, err := h.service.Login(c.Request().Context(), req.Email, req.Password)
-	if err != nil {
-		return mapServiceError(c, err)
-	}
-
-	setRefreshCookie(c, out.RefreshToken, out.RefreshExpiry)
-	return response.OK(c, map[string]string{"access_token": out.AccessToken})
-}
-
-// POST /admin/auth/refresh
-func (h *Handler) Refresh(c echo.Context) error {
-	cookie, err := c.Cookie(refreshTokenCookieName)
-	if err != nil || cookie.Value == "" {
-		return response.Unauthorized(c)
-	}
-
-	out, err := h.service.Refresh(c.Request().Context(), cookie.Value)
-	if err != nil {
-		clearRefreshCookie(c)
-		return mapServiceError(c, err)
-	}
-
-	setRefreshCookie(c, out.RefreshToken, out.RefreshExpiry)
-	return response.OK(c, map[string]string{"access_token": out.AccessToken})
-}
-
-// POST /admin/auth/logout
-func (h *Handler) Logout(c echo.Context) error {
-	cookie, _ := c.Cookie(refreshTokenCookieName)
-	plain := ""
-	if cookie != nil {
-		plain = cookie.Value
-	}
-	_ = h.service.Logout(c.Request().Context(), plain)
-	clearRefreshCookie(c)
-	return response.NoContent(c)
-}
-
-// GET /admin/me
-func (h *Handler) Me(c echo.Context) error {
-	adminID, err := adminIDFromCtx(c)
-	if err != nil {
-		return response.Unauthorized(c)
-	}
-
-	admin, err := h.service.Me(c.Request().Context(), adminID)
-	if err != nil {
-		return mapServiceError(c, err)
-	}
-	return response.OK(c, admin)
-}
-
-// ----------------------------------------------------------------
-// Business handlers
-// ----------------------------------------------------------------
-
-// GET /admin/businesses
-func (h *Handler) ListBusinesses(c echo.Context) error {
-	businesses, err := h.service.ListBusinesses(c.Request().Context())
+	result, err := h.service.ListOwners(c.Request().Context(), page, limit)
 	if err != nil {
 		return response.Internal(c)
 	}
-	if businesses == nil {
-		businesses = []*Business{}
-	}
-	return response.OK(c, map[string]any{"businesses": businesses})
+	return response.OK(c, result)
 }
 
-// POST /admin/businesses
-func (h *Handler) CreateBusiness(c echo.Context) error {
+// POST /admin/owners
+func (h *Handler) CreateOwner(c echo.Context) error {
 	var req CreateBusinessRequest
 	if err := c.Bind(&req); err != nil {
 		return response.BadRequest(c, "invalid request body")
@@ -235,30 +131,30 @@ func (h *Handler) CreateBusiness(c echo.Context) error {
 		return response.BadRequest(c, err.Error())
 	}
 
-	b, err := h.service.CreateBusiness(c.Request().Context(), req)
+	b, err := h.service.CreateOwner(c.Request().Context(), req)
 	if err != nil {
 		return mapServiceError(c, err)
 	}
 	return response.Created(c, b)
 }
 
-// GET /admin/businesses/:business_id
-func (h *Handler) GetBusiness(c echo.Context) error {
-	id, err := businessIDParam(c)
+// GET /admin/owners/:owner_id
+func (h *Handler) GetOwner(c echo.Context) error {
+	id, err := ownerIDParam(c)
 	if err != nil {
 		return response.BadRequest(c, err.Error())
 	}
 
-	b, err := h.service.GetBusiness(c.Request().Context(), id)
+	o, err := h.service.GetOwner(c.Request().Context(), id)
 	if err != nil {
 		return mapServiceError(c, err)
 	}
-	return response.OK(c, b)
+	return response.OK(c, o)
 }
 
-// PATCH /admin/businesses/:business_id
-func (h *Handler) UpdateBusiness(c echo.Context) error {
-	id, err := businessIDParam(c)
+// PATCH /admin/owners/:owner_id
+func (h *Handler) UpdateOwner(c echo.Context) error {
+	id, err := ownerIDParam(c)
 	if err != nil {
 		return response.BadRequest(c, err.Error())
 	}
@@ -271,20 +167,59 @@ func (h *Handler) UpdateBusiness(c echo.Context) error {
 		return response.BadRequest(c, err.Error())
 	}
 
-	b, err := h.service.UpdateBusiness(c.Request().Context(), id, req)
+	b, err := h.service.UpdateOwner(c.Request().Context(), id, req)
 	if err != nil {
 		return mapServiceError(c, err)
 	}
 	return response.OK(c, b)
 }
 
+// PATCH /admin/owners/:owner_id/status
+func (h *Handler) SetOwnerStatus(c echo.Context) error {
+	id, err := ownerIDParam(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
+
+	var req SetOwnerStatusRequest
+	if err := c.Bind(&req); err != nil {
+		return response.BadRequest(c, "invalid request body")
+	}
+
+	if err := h.service.SetOwnerStatus(c.Request().Context(), id, req.Enabled); err != nil {
+		return mapServiceError(c, err)
+	}
+	return response.NoContent(c)
+}
+
+// POST /admin/owners/:owner_id/credential
+func (h *Handler) SetOwnerCredential(c echo.Context) error {
+	id, err := ownerIDParam(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
+
+	var req SetOwnerCredentialRequest
+	if err := c.Bind(&req); err != nil {
+		return response.BadRequest(c, "invalid request body")
+	}
+	if err := c.Validate(&req); err != nil {
+		return response.BadRequest(c, err.Error())
+	}
+
+	if err := h.service.SetOwnerCredential(c.Request().Context(), id, req); err != nil {
+		return mapServiceError(c, err)
+	}
+	return response.NoContent(c)
+}
+
 // ----------------------------------------------------------------
 // Product handlers
 // ----------------------------------------------------------------
 
-// GET /admin/businesses/:business_id/products
-func (h *Handler) ListProducts(c echo.Context) error {
-	businessID, err := businessIDParam(c)
+// GET /admin/owners/:owner_id/products
+func (h *Handler) ListOwnerProducts(c echo.Context) error {
+	businessID, err := ownerIDParam(c)
 	if err != nil {
 		return response.BadRequest(c, err.Error())
 	}
@@ -299,9 +234,9 @@ func (h *Handler) ListProducts(c echo.Context) error {
 	return response.OK(c, map[string]any{"products": products})
 }
 
-// POST /admin/businesses/:business_id/products
+// POST /admin/owners/:owner_id/products
 func (h *Handler) CreateProduct(c echo.Context) error {
-	businessID, err := businessIDParam(c)
+	businessID, err := ownerIDParam(c)
 	if err != nil {
 		return response.BadRequest(c, err.Error())
 	}
@@ -319,6 +254,20 @@ func (h *Handler) CreateProduct(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 	return response.Created(c, p)
+}
+
+// GET /admin/products/:product_id
+func (h *Handler) GetProduct(c echo.Context) error {
+	productID, err := productIDParam(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
+
+	p, err := h.service.GetProduct(c.Request().Context(), productID)
+	if err != nil {
+		return mapServiceError(c, err)
+	}
+	return response.OK(c, p)
 }
 
 // PATCH /admin/products/:product_id
@@ -356,13 +305,34 @@ func (h *Handler) DeleteProduct(c echo.Context) error {
 	return response.NoContent(c)
 }
 
+// PUT /admin/products/:product_id/recipe
+func (h *Handler) UpdateProductRecipe(c echo.Context) error {
+	productID, err := productIDParam(c)
+	if err != nil {
+		return response.BadRequest(c, err.Error())
+	}
+
+	var req UpdateRecipeRequest
+	if err := c.Bind(&req); err != nil {
+		return response.BadRequest(c, "invalid request body")
+	}
+	if err := c.Validate(&req); err != nil {
+		return response.BadRequest(c, err.Error())
+	}
+
+	if err := h.service.UpdateProductRecipe(c.Request().Context(), productID, req); err != nil {
+		return mapServiceError(c, err)
+	}
+	return response.NoContent(c)
+}
+
 // ----------------------------------------------------------------
 // Operator handlers
 // ----------------------------------------------------------------
 
-// DELETE /admin/businesses/:business_id/operators/:operator_id
+// DELETE /admin/owners/:owner_id/operators/:operator_id
 func (h *Handler) DeleteOperator(c echo.Context) error {
-	businessID, err := businessIDParam(c)
+	businessID, err := ownerIDParam(c)
 	if err != nil {
 		return response.BadRequest(c, err.Error())
 	}

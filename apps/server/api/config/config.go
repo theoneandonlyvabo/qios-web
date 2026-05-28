@@ -27,6 +27,8 @@ type Config struct {
 	JWTAccessExpiry  string
 	JWTRefreshExpiry string
 
+	AdminAPIKey string
+
 	CORSAllowedOrigins string
 }
 
@@ -53,6 +55,8 @@ func Load() *Config {
 		JWTAccessExpiry:  getEnv("JWT_ACCESS_EXPIRY", "15m"),
 		JWTRefreshExpiry: getEnv("JWT_REFRESH_EXPIRY", "720h"),
 
+		AdminAPIKey: getEnv("ADMIN_API_KEY", ""),
+
 		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
 	}
 }
@@ -66,6 +70,9 @@ func (c *Config) Validate() error {
 	}
 	if c.DBPassword == "" {
 		errs = append(errs, "DB_PASSWORD is required")
+	}
+	if c.AdminAPIKey == "" {
+		errs = append(errs, "ADMIN_API_KEY is required")
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("config: %v", errs)
