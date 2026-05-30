@@ -10,10 +10,13 @@ CREATE SEQUENCE IF NOT EXISTS qios_id_seq
 
 SELECT setval(
     'qios_id_seq',
-    COALESCE(
-        MAX(CAST(SUBSTRING(qios_id FROM 6) AS INTEGER)),
-        0
+    GREATEST(
+        COALESCE(
+            MAX(CAST(SUBSTRING(qios_id FROM 6) AS INTEGER)),
+            0
+        ),
+        1
     )
 )
 FROM businesses
-WHERE qios_id ~ '^QIOS-\d+$';
+WHERE qios_id ~ '^QIOS-\d+';

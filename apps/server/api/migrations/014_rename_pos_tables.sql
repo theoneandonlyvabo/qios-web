@@ -5,8 +5,6 @@
 -- WARNING: Do NOT run against any database until application code is deployed.
 -- Apply to staging first, verify row counts before/after, then production.
 
-BEGIN;
-
 ALTER TABLE pos_orders      RENAME TO orders;
 ALTER TABLE pos_order_items RENAME TO order_items;
 ALTER TABLE pos_sessions    RENAME TO order_sessions;
@@ -25,5 +23,3 @@ ALTER INDEX idx_pos_order_items_product_id   RENAME TO idx_order_items_product_i
 ALTER INDEX idx_pos_sessions_operator_id     RENAME TO idx_order_sessions_operator_id;
 ALTER INDEX idx_pos_sessions_business_id     RENAME TO idx_order_sessions_business_id;
 ALTER INDEX idx_pos_sessions_ended_at        RENAME TO idx_order_sessions_ended_at;
-
-COMMIT;
