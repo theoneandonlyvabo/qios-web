@@ -5,7 +5,15 @@ NPM := npm
 CLIENT_APPS := apps/client/entry apps/client/operator apps/client/owner
 SERVER_API := apps/server/api
 
-.PHONY: help dev server api client entry operator owner install install-client lint fmt gofmt vet
+# Local Postgres (no compose file — infra repo is separate)
+PG_CONTAINER := qios-postgres
+PG_IMAGE := postgres:16-alpine
+PG_PORT := 5432
+PG_USER := postgres
+PG_PASSWORD := postgres
+PG_DB := qios
+
+.PHONY: help dev server api client entry operator owner install install-client lint fmt gofmt vet db db-stop db-rm db-reset db-logs db-psql
 
 help:
 	@printf "\nUsage:\n"
@@ -19,9 +27,13 @@ help:
 	@printf "  make install      Install client dependencies\n"
 	@printf "  make lint         Run client lint and Go vet\n"
 	@printf "  make vet          Run Go vet on the API server\n"
-	@printf "  make fmt          Format Go sources\n\n"
-	@printf "Note: Infra (PostgreSQL, docker-compose) lives in a separate repo.\n"
-	@printf "Start Postgres there before running 'make server'.\n\n"
+	@printf "  make fmt          Format Go sources\n"
+	@printf "  make db           Start local Postgres in Docker (creates container if missing)\n"
+	@printf "  make db-stop      Stop the Postgres container\n"
+	@printf "  make db-rm        Stop and remove the Postgres container (keeps volume)\n"
+	@printf "  make db-reset     Remove container + volume (DESTRUCTIVE — wipes data)\n"
+	@printf "  make db-logs      Follow Postgres logs\n"
+	@printf "  make db-psql      Open a psql shell inside the container\n\n"
 
 # Start backend and all clients together
 dev:
@@ -73,3 +85,42 @@ fmt: gofmt
 
 gofmt:
 	find $(SERVER_API) -name '*.go' | sort | xargs $(GO)fmt -w
+
+# --- Local Postgres (Docker) ---------------------------------------------------
+# Starts (or resumes) a single Postgres container named $(PG_CONTAINER).
+# Credentials must match apps/server/api/.env.
+db:
+	@if [ -z "$$(docker ps -aq -f name=^/$(PG_CONTAINER)$$)" ]; then \
+		printf "Creating $(PG_CONTAINER) ($(PG_IMAGE)) on port $(PG_PORT)...\n"; \
+		docker run -d \
+			--name $(PG_CONTAINER) \
+			-e POSTGRES_USER=$(PG_USER) \
+			-e POSTGRES_PASSWORD=$(PG_PASSWORD) \
+			-e POSTGRES_DB=$(PG_DB) \
+			-p $(PG_PORT):5432 \
+			-v $(PG_CONTAINER)-data:/var/lib/postgresql/data \
+			$(PG_IMAGE); \
+	else \
+		printf "Starting existing $(PG_CONTAINER)...\n"; \
+		docker start $(PG_CONTAINER); \
+	fi
+	@printf "Waiting for Postgres to accept connections..."
+	@until docker exec $(PG_CONTAINER) pg_isready -U $(PG_USER) -d $(PG_DB) >/dev/null 2>&1; do \
+		printf "."; sleep 1; \
+	done; \
+	printf " ready.\n"
+
+db-stop:
+	-docker stop $(PG_CONTAINER)
+
+db-rm: db-stop
+	-docker rm $(PG_CONTAINER)
+
+db-reset: db-rm
+	-docker volume rm $(PG_CONTAINER)-data
+
+db-logs:
+	docker logs -f $(PG_CONTAINER)
+
+db-psql:
+	docker exec -it $(PG_CONTAINER) psql -U $(PG_USER) -d $(PG_DB)
