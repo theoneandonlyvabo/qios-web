@@ -84,11 +84,11 @@ export const productsApi = {
 export const analyticsApi = {
   getOverview: (startDate: string, endDate: string, compareWith = 'previous_period') =>
     request(
-      `/analytics/overview?start_date=${startDate}&end_date=${endDate}&compare_with=${compareWith}`
+      `/metrics/overview?start_date=${startDate}&end_date=${endDate}&compare_with=${compareWith}`
     ),
 };
 
 // ---- Insight ----
 export const insightApi = {
-  list: () => request('/insight'),
+  list: () => request('/metrics/insight'),
 };
