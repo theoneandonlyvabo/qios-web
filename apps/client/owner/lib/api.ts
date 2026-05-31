@@ -3,7 +3,7 @@
 // Tidak ada fetch() langsung di komponen
 // ==========================================
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+const BASE_URL = process.env.NEXT_PUBLIC_QIOS_API_URL ?? 'http://localhost:8080';
 
 type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
@@ -36,16 +36,16 @@ export const authApi = {
   refresh: () => request<{ data: { access_token: string } }>('/auth/refresh', { method: 'POST' }),
 };
 
-// ---- Dashboard ----
+// ---- Metrics ----
 export const dashboardApi = {
   getSummary: (period?: string) =>
-    request(`/dashboard/summary${period ? `?period=${period}` : ''}`),
+    request(`/metrics/summary${period ? `?period=${period}` : ''}`),
   getTrend: (startDate: string, endDate: string) =>
-    request(`/dashboard/transactions/trend?start_date=${startDate}&end_date=${endDate}`),
+    request(`/metrics/trend?start_date=${startDate}&end_date=${endDate}`),
   getTopProducts: (period?: string, limit = 5) =>
-    request(`/dashboard/products/top?limit=${limit}${period ? `&period=${period}` : ''}`),
+    request(`/metrics/top-products?limit=${limit}${period ? `&period=${period}` : ''}`),
   getPeakHours: (period?: string) =>
-    request(`/dashboard/transactions/peak-hours${period ? `?period=${period}` : ''}`),
+    request(`/metrics/peak-hours${period ? `?period=${period}` : ''}`),
 };
 
 // ---- Transactions ----
