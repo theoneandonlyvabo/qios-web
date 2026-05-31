@@ -1,65 +1,123 @@
-import Image from "next/image";
+  "use client";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
-}
+  import { useState } from "react";
+  import { useRouter } from "next/navigation";
+  import { Icon } from "@/components/icons";
+  import { OperatorShell } from "@/components/operator-shell";
+  import { QiosLogo } from "@/components/qios-logo";
+
+  export default function LoginPage() {
+    const router = useRouter();
+    const [showCodeLogin, setShowCodeLogin] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    function mockLogin() {
+      setError("");
+      setLoading(true);
+      window.setTimeout(() => router.push("/order"), 650);
+    }
+
+    function simulateInvalidQr() {
+      setError("QR tidak valid. Coba scan ulang atau login dengan code.");
+    }
+
+    return (
+      <OperatorShell withNav={false}>
+        <main className="flex min-h-dvh flex-col bg-[radial-gradient(circle_at_50%_24%,rgba(255,181,158,0.12),transparent_20rem)] px-4 py-8 safe-pb">
+          <div className="flex flex-1 flex-col items-center justify-center">
+            <div className="mb-14 flex flex-col items-center gap-5 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-[28px] bg-card-high text-primary shadow-glow">
+                <Icon name="pos" className="h-9 w-9" />
+              </div>
+              <div>
+                <h1 className="text-xl font-extrabold text-foreground">QIOS Operator</h1>
+                <p className="mt-1 text-sm font-medium text-primary">Kasir cepat untuk bisnis kamu</p>
+              </div>
+            </div>
+
+            <div className="w-full space-y-4">
+              <button
+                onClick={mockLogin}
+                className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-primary text-base font-extrabold text-primary-foreground shadow-glow transition active:scale-[0.98] disabled:opacity-70"
+                disabled={loading}
+                type="button"
+              >
+                {loading ? (
+                  "Membuka kasir..."
+                ) : (
+                  <>
+                    <Icon name="qr" className="h-5 w-5" />
+                    Scan QR Operator
+                  </>
+                )}
+              </button>
+
+              <p className="mx-auto max-w-[260px] text-center text-xs font-bold leading-relaxed text-muted-foreground">
+                Gunakan QR dari dashboard owner untuk masuk lebih cepat.
+              </p>
+
+              <div className="flex items-center gap-3 py-1">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-muted">atau</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+
+              {!showCodeLogin ? (
+                <button
+                  onClick={() => setShowCodeLogin(true)}
+                  className="flex h-[52px] w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-extrabold text-foreground transition hover:bg-card-high active:scale-[0.98]"
+                  type="button"
+                >
+                  <Icon name="menu" className="h-4 w-4" />
+                  Login dengan Code
+                </button>
+              ) : (
+                <form
+                  className="rounded-2xl border border-border bg-card p-4 shadow-soft"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    mockLogin();
+                  }}
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-extrabold text-foreground">Login dengan Code</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowCodeLogin(false)}
+                      className="text-muted-foreground"
+                      aria-label="Tutup form"
+                    >
+                      <Icon name="close" className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    <input className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground placeholder:text-muted" placeholder="Business ID" defaultValue="QIOS-000001" />
+                    <input className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground placeholder:text-muted" placeholder="Operator Code" defaultValue="RZK-01" />
+                    <input className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground placeholder:text-muted" placeholder="Password" type="password" defaultValue="password" />
+                    <button className="h-12 w-full rounded-xl bg-brand text-sm font-extrabold text-white transition active:scale-[0.98]" type="submit">
+                      Masuk
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {error && <p className="rounded-xl border border-danger/30 bg-danger/10 p-3 text-sm font-bold text-danger">{error}</p>}
+
+              <button
+                onClick={simulateInvalidQr}
+                className="mx-auto block text-xs font-bold text-muted-foreground underline decoration-border underline-offset-4"
+                type="button"
+              >
+                Simulasikan QR error
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-center">
+            <QiosLogo />
+          </div>
+        </main>
+      </OperatorShell>
+    );
+  }
