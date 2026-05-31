@@ -249,7 +249,7 @@ func (h *Handler) CreateProduct(c echo.Context) error {
 		return response.BadRequest(c, err.Error())
 	}
 
-	p, err := h.service.CreateProduct(c.Request().Context(), businessID, req)
+	p, err := h.service.CreateProduct(c.Request().Context(), adminID, businessID, req)
 	if err != nil {
 		return mapServiceError(c, err)
 	}
@@ -272,6 +272,10 @@ func (h *Handler) GetProduct(c echo.Context) error {
 
 // PATCH /admin/products/:product_id
 func (h *Handler) UpdateProduct(c echo.Context) error {
+	adminID, err := adminIDFromCtx(c)
+	if err != nil {
+		return response.Unauthorized(c)
+	}
 	productID, err := productIDParam(c)
 	if err != nil {
 		return response.BadRequest(c, err.Error())
@@ -285,7 +289,7 @@ func (h *Handler) UpdateProduct(c echo.Context) error {
 		return response.BadRequest(c, err.Error())
 	}
 
-	p, err := h.service.UpdateProduct(c.Request().Context(), productID, req)
+	p, err := h.service.UpdateProduct(c.Request().Context(), adminID, productID, req)
 	if err != nil {
 		return mapServiceError(c, err)
 	}
@@ -294,12 +298,16 @@ func (h *Handler) UpdateProduct(c echo.Context) error {
 
 // DELETE /admin/products/:product_id
 func (h *Handler) DeleteProduct(c echo.Context) error {
+	adminID, err := adminIDFromCtx(c)
+	if err != nil {
+		return response.Unauthorized(c)
+	}
 	productID, err := productIDParam(c)
 	if err != nil {
 		return response.BadRequest(c, err.Error())
 	}
 
-	if err := h.service.DeleteProduct(c.Request().Context(), productID); err != nil {
+	if err := h.service.DeleteProduct(c.Request().Context(), adminID, productID); err != nil {
 		return mapServiceError(c, err)
 	}
 	return response.NoContent(c)
@@ -341,7 +349,7 @@ func (h *Handler) DeleteOperator(c echo.Context) error {
 		return response.BadRequest(c, err.Error())
 	}
 
-	if err := h.service.DeleteOperator(c.Request().Context(), businessID, operatorID); err != nil {
+	if err := h.service.DeleteOperator(c.Request().Context(), adminID, businessID, operatorID); err != nil {
 		return mapServiceError(c, err)
 	}
 	return response.NoContent(c)
@@ -390,12 +398,16 @@ func (h *Handler) ListTransactions(c echo.Context) error {
 
 // POST /admin/transactions/:transaction_id/void
 func (h *Handler) VoidTransaction(c echo.Context) error {
+	adminID, err := adminIDFromCtx(c)
+	if err != nil {
+		return response.Unauthorized(c)
+	}
 	txID, err := transactionIDParam(c)
 	if err != nil {
 		return response.BadRequest(c, err.Error())
 	}
 
-	if err := h.service.VoidTransaction(c.Request().Context(), txID); err != nil {
+	if err := h.service.VoidTransaction(c.Request().Context(), adminID, txID); err != nil {
 		return mapServiceError(c, err)
 	}
 	return response.NoContent(c)

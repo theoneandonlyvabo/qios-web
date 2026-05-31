@@ -38,7 +38,7 @@ type Service interface {
 
 	// Transaction management
 	ListTransactions(ctx context.Context, f AdminListTransactionsFilter) (*AdminListTransactionsResult, error)
-	VoidTransaction(ctx context.Context, transactionID uuid.UUID) error
+	VoidTransaction(ctx context.Context, adminID, transactionID uuid.UUID) error
 }
 
 type service struct {
@@ -106,6 +106,7 @@ func (s *service) UpdateOwner(ctx context.Context, businessID uuid.UUID, req Upd
 	if err := s.repo.UpdateBusiness(ctx, b); err != nil {
 		return nil, err
 	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "business", &b.ID, "update_business")
 	return b, nil
 }
 
@@ -129,8 +130,13 @@ func (s *service) ListProducts(ctx context.Context, businessID uuid.UUID) ([]*Ad
 	return s.repo.ListProductsByBusiness(ctx, businessID)
 }
 
-func (s *service) CreateProduct(ctx context.Context, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error) {
-	return s.repo.CreateProduct(ctx, businessID, req)
+func (s *service) CreateProduct(ctx context.Context, adminID, businessID uuid.UUID, req AdminCreateProductRequest) (*AdminProduct, error) {
+	p, err := s.repo.CreateProduct(ctx, businessID, req)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "product", &p.ID, "create_product")
+	return p, nil
 }
 
 func (s *service) GetProduct(ctx context.Context, productID uuid.UUID) (*AdminProductDetail, error) {
@@ -162,6 +168,7 @@ func (s *service) UpdateProduct(ctx context.Context, productID uuid.UUID, req Ad
 	if err := s.repo.UpdateProduct(ctx, p); err != nil {
 		return nil, fmt.Errorf("admin service: update product: %w", err)
 	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "product", &p.ID, "update_product")
 	return p, nil
 }
 
@@ -205,6 +212,10 @@ func (s *service) ListTransactions(ctx context.Context, f AdminListTransactionsF
 	}, nil
 }
 
-func (s *service) VoidTransaction(ctx context.Context, id uuid.UUID) error {
-	return s.repo.VoidTransaction(ctx, id)
+func (s *service) VoidTransaction(ctx context.Context, adminID, id uuid.UUID) error {
+	if err := s.repo.VoidTransaction(ctx, id); err != nil {
+		return err
+	}
+	_ = s.repo.WriteAuditLog(ctx, adminID, "transaction", &id, "void_transaction")
+	return nil
 }

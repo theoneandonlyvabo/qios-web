@@ -1,0 +1,20 @@
+/* ==========================================
+   STYLE GLOBAL & IMPORT TAILWIND CSS
+   PT Skalar Solusi Digital - Developer: Alayavaro Rachmadia
+   ========================================== */
+
+/* Tailwind CSS v4 */
+@import "tailwindcss";
+
+/* Dark mode berbasis class (.dark di <html>), bukan media query OS */
+@variant dark (&:where(.dark, .dark *));
+
+/* Animasi Tambahan untuk transisi halus QIOS */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
