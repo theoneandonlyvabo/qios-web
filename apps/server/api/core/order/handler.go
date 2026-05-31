@@ -205,11 +205,7 @@ func (h *Handler) VoidOrder(c echo.Context) error {
 		return response.BadRequest(c, err.Error())
 	}
 
-	// nil means caller is an owner — allowed to void any order in their business.
-	// Non-nil means caller is an operator — restricted to their own orders only.
-	callerOperatorID := operatorIDFromCtx(c)
-
-	if err := h.service.VoidOrder(c.Request().Context(), businessID, orderID, callerOperatorID); err != nil {
+	if err := h.service.VoidOrder(c.Request().Context(), businessID, orderID); err != nil {
 		return mapServiceError(c, err)
 	}
 	return response.NoContent(c)

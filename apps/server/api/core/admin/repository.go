@@ -46,9 +46,6 @@ type Repository interface {
 	ListTransactions(ctx context.Context, f AdminListTransactionsFilter) ([]*AdminTransaction, int, error)
 	FindTransactionByID(ctx context.Context, id uuid.UUID) (*AdminTransaction, error)
 	VoidTransaction(ctx context.Context, id uuid.UUID) error
-
-	// Audit
-	WriteAuditLog(ctx context.Context, adminID uuid.UUID, targetType string, targetID *uuid.UUID, action string) error
 }
 
 type PostgresRepository struct {

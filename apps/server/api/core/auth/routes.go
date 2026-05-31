@@ -21,8 +21,8 @@ func RegisterRoutes(e *echo.Echo, h *Handler) {
 
 	// Owner
 	auth.POST("/login", h.Login, loginRateLimiter)
-	auth.POST("/refresh", h.Refresh, loginRateLimiter)
-	auth.POST("/logout", h.Logout, loginRateLimiter)
+	auth.POST("/refresh", h.Refresh)
+	auth.POST("/logout", h.Logout)
 
 	// Google OAuth — post-MVP
 	auth.POST("/google/login", h.GoogleLogin, loginRateLimiter)
