@@ -2,58 +2,58 @@ SHELL := /bin/bash
 
 GO := go
 NPM := npm
-DC := docker compose
-COMPOSE_FILE := infra/docker-compose.yml
-CLIENT_APPS := apps/client/admin apps/client/operator apps/client/owner
-SERVER_AI := apps/server/ai
+CLIENT_APPS := apps/client/entry apps/client/operator apps/client/owner
 SERVER_API := apps/server/api
 
-.PHONY: help dev server api ai client admin operator owner install install-client lint fmt gofmt db down down-v compose logs
+# Local Postgres (no compose file — infra repo is separate)
+PG_CONTAINER := qios-postgres
+PG_IMAGE := postgres:16-alpine
+PG_PORT := 5432
+PG_USER := postgres
+PG_PASSWORD := postgres
+PG_DB := qios
+
+.PHONY: help dev server api client entry operator owner install install-client lint fmt gofmt vet db db-stop db-rm db-reset db-logs db-psql
 
 help:
 	@printf "\nUsage:\n"
-	@printf "  make dev          Start backend and frontend in parallel\n"
-	@printf "  make server       Start API and AI backend in parallel\n"
-	@printf "  make api          Start only the API server\n"
-	@printf "  make ai           Start only the AI backend\n"
-	@printf "  make client       Start all client apps (admin, operator, owner)\n"
-	@printf "  make admin        Start admin client\n"
-	@printf "  make operator     Start operator client\n"
-	@printf "  make owner        Start owner client\n"
+	@printf "  make dev          Start backend and all client apps in parallel\n"
+	@printf "  make server       Start the API server\n"
+	@printf "  make api          Start the API server (alias of make server)\n"
+	@printf "  make client       Start all client apps (entry, operator, owner)\n"
+	@printf "  make entry        Start entry client (port 3000)\n"
+	@printf "  make operator     Start operator client (port 3001)\n"
+	@printf "  make owner        Start owner client (port 3002)\n"
 	@printf "  make install      Install client dependencies\n"
 	@printf "  make lint         Run client lint and Go vet\n"
+	@printf "  make vet          Run Go vet on the API server\n"
 	@printf "  make fmt          Format Go sources\n"
-	@printf "  make db           Start PostgreSQL via Docker Compose\n"
-	@printf "  make down         Stop Docker Compose services\n"
-	@printf "  make down-v       Stop Docker Compose and remove volumes\n"
-	@printf "  make compose      Build and start Docker Compose\n"
-	@printf "  make logs         Follow Docker Compose logs\n\n"
+	@printf "  make db           Start local Postgres in Docker (creates container if missing)\n"
+	@printf "  make db-stop      Stop the Postgres container\n"
+	@printf "  make db-rm        Stop and remove the Postgres container (keeps volume)\n"
+	@printf "  make db-reset     Remove container + volume (DESTRUCTIVE — wipes data)\n"
+	@printf "  make db-logs      Follow Postgres logs\n"
+	@printf "  make db-psql      Open a psql shell inside the container\n\n"
 
-# Start backend and frontend together
+# Start backend and all clients together
 dev:
 	npx concurrently --names "server,client" --prefix-colors "cyan,yellow" \
-		"make server" \
-		"make client"
+		"$(MAKE) server" \
+		"$(MAKE) client"
 
-server:
-	npx concurrently --names "ai,api" --prefix-colors "cyan,cyan" \
-		"cd $(SERVER_AI) && $(GO) run ./cmd/..." \
-		"cd $(SERVER_API) && $(GO) run ./cmd/..."
+server: api
 
 api:
 	cd $(SERVER_API) && $(GO) run ./cmd/...
 
-ai:
-	cd $(SERVER_AI) && $(GO) run ./cmd/...
-
 client:
-	npx concurrently --names "admin,operator,owner" --prefix-colors "yellow,yellow,yellow" \
-		"cd apps/client/admin && $(NPM) run dev" \
+	npx concurrently --names "entry,operator,owner" --prefix-colors "yellow,magenta,green" \
+		"cd apps/client/entry && $(NPM) run dev" \
 		"cd apps/client/operator && $(NPM) run dev" \
 		"cd apps/client/owner && $(NPM) run dev"
 
-admin:
-	cd apps/client/admin && $(NPM) run dev
+entry:
+	cd apps/client/entry && $(NPM) run dev
 
 operator:
 	cd apps/client/operator && $(NPM) run dev
@@ -66,36 +66,61 @@ install: install-client
 install-client:
 	@for dir in $(CLIENT_APPS); do \
 		printf "Installing dependencies in $$dir...\n"; \
-		cd $$dir && $(NPM) install; \
+		(cd $$dir && $(NPM) install); \
 	done
 
 lint:
 	@printf "Linting client apps...\n"
 	@for dir in $(CLIENT_APPS); do \
 		printf "- $$dir\n"; \
-		cd $$dir && $(NPM) run lint; \
+		(cd $$dir && $(NPM) run lint); \
 	done
 	@printf "\nRunning Go vet...\n"
-	cd apps/server && $(GO) vet ./...
+	cd $(SERVER_API) && $(GO) vet ./...
+
+vet:
+	cd $(SERVER_API) && $(GO) vet ./...
 
 fmt: gofmt
 
 gofmt:
-	find apps/server -name '*.go' | sort | xargs $(GO)fmt -w
+	find $(SERVER_API) -name '*.go' | sort | xargs $(GO)fmt -w
 
-# Docker Compose helpers
-# `docker compose -f infra/docker-compose.yml` is used because root docker-compose.yml is intentionally empty.
+# --- Local Postgres (Docker) ---------------------------------------------------
+# Starts (or resumes) a single Postgres container named $(PG_CONTAINER).
+# Credentials must match apps/server/api/.env.
 db:
-	$(DC) -f $(COMPOSE_FILE) up postgres -d
+	@if [ -z "$$(docker ps -aq -f name=^/$(PG_CONTAINER)$$)" ]; then \
+		printf "Creating $(PG_CONTAINER) ($(PG_IMAGE)) on port $(PG_PORT)...\n"; \
+		docker run -d \
+			--name $(PG_CONTAINER) \
+			-e POSTGRES_USER=$(PG_USER) \
+			-e POSTGRES_PASSWORD=$(PG_PASSWORD) \
+			-e POSTGRES_DB=$(PG_DB) \
+			-p $(PG_PORT):5432 \
+			-v $(PG_CONTAINER)-data:/var/lib/postgresql/data \
+			$(PG_IMAGE); \
+	else \
+		printf "Starting existing $(PG_CONTAINER)...\n"; \
+		docker start $(PG_CONTAINER); \
+	fi
+	@printf "Waiting for Postgres to accept connections..."
+	@until docker exec $(PG_CONTAINER) pg_isready -U $(PG_USER) -d $(PG_DB) >/dev/null 2>&1; do \
+		printf "."; sleep 1; \
+	done; \
+	printf " ready.\n"
 
-down:
-	$(DC) -f $(COMPOSE_FILE) down
+db-stop:
+	-docker stop $(PG_CONTAINER)
 
-down-v:
-	$(DC) -f $(COMPOSE_FILE) down -v
+db-rm: db-stop
+	-docker rm $(PG_CONTAINER)
 
-compose:
-	$(DC) -f $(COMPOSE_FILE) up --build
+db-reset: db-rm
+	-docker volume rm $(PG_CONTAINER)-data
 
-logs:
-	$(DC) -f $(COMPOSE_FILE) logs -f
+db-logs:
+	docker logs -f $(PG_CONTAINER)
+
+db-psql:
+	docker exec -it $(PG_CONTAINER) psql -U $(PG_USER) -d $(PG_DB)
