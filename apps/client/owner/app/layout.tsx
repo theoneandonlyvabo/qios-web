@@ -75,7 +75,6 @@ const INITIAL_PRODUCTS = [
   }
 ];
 
-// Helper Format Rupiah
 const formatRupiah = (num: number) => {
   if (num === undefined || num === null) return 'Rp 0';
   return 'Rp ' + num.toLocaleString('id-ID');
@@ -86,46 +85,24 @@ export default function RootLayout({
 }: {
   children?: React.ReactNode;
 }) {
-  // State Tema Global (Default Dark Mode Premium)
   const [isDarkMode, setIsDarkMode] = useState(true);
-
-  // State Hamburger Menu HP
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Next.js hooks
   const pathname = usePathname();
   const router = useRouter();
 
-  // Email owner statis
   const userEmail = 'alayavaro@skalar.id';
 
-  // Mapping Tokens Desain Premium
-  const t = useMemo(() => {
-    return {
-      body: isDarkMode ? 'bg-[#0F0F0F] text-[#FFFFFF]' : 'bg-[#F4F4F6] text-[#1D1D1F]',
-      card: isDarkMode ? 'bg-[#161616] border-[#242424]' : 'bg-[#FFFFFF] border-[#E5E5E7] shadow-sm',
-      sidebar: isDarkMode ? 'bg-[#161616] border-[#242424]' : 'bg-[#FFFFFF] border-[#E5E5E7]',
-      sidebarProfile: isDarkMode ? 'bg-[#1A1A1A] border-[#2D2D2D]' : 'bg-[#F2F2F7] border-[#E5E5E7]',
-      sidebarItemActive: isDarkMode ? 'bg-[#212121] text-[#CA400A] border-l-4 border-[#CA400A]' : 'bg-[#F2F2F7] text-[#CA400A] border-l-4 border-[#CA400A]',
-      sidebarItemHover: isDarkMode ? 'text-gray-400 hover:text-white hover:bg-[#1A1A1A]' : 'text-gray-600 hover:text-gray-900 hover:bg-[#F2F2F7]',
-      textTitle: isDarkMode ? 'text-white' : 'text-[#1D1D1F]',
-      textSub: isDarkMode ? 'text-gray-300' : 'text-gray-700',
-      textMuted: isDarkMode ? 'text-gray-400' : 'text-gray-500',
-      divider: isDarkMode ? 'border-[#242424]' : 'border-gray-200/60',
-      input: isDarkMode ? 'bg-[#242424] border-[#383838] text-white focus:border-[#CA400A]' : 'bg-white border-gray-300 text-gray-900 focus:border-[#CA400A]',
-      nestedBox: isDarkMode ? 'bg-[#212121] border-[#2D2D2D]' : 'bg-[#F5F5F7] border-[#E5E5E7]',
-      buttonSecondary: isDarkMode ? 'bg-[#242424] hover:bg-[#2F2F2F] text-white border border-[#2D2D2D]' : 'bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300',
-      badgeNeutral: isDarkMode ? 'bg-[#242424] text-gray-400 border-[#313131]' : 'bg-gray-100 text-gray-600 border-gray-200',
-    };
-  }, [isDarkMode]);
-
-  // Sinkronisasi class 'dark' ke <html> setiap kali isDarkMode berubah
+  // Load theme preference
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    const saved = localStorage.getItem('qios-owner-theme');
+    if (saved !== null) setIsDarkMode(saved === 'dark');
+  }, []);
+
+  // Sync data-theme attribute + persist
+  useEffect(() => {
+    document.documentElement.dataset.theme = isDarkMode ? 'dark' : 'light';
+    localStorage.setItem('qios-owner-theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
   // Carousel Teks Berjalan
@@ -216,7 +193,6 @@ export default function RootLayout({
     setIsMobileMenuOpen(false);
   };
 
-  // Sinkronisasi Active Tab dengan rute halaman — derive langsung dari pathname, tidak perlu state terpisah
   const activeTab = useMemo(() => {
     if (!pathname) return 'dashboard';
     const currentRoute = pathname.replace(/^\//, '');
@@ -224,7 +200,6 @@ export default function RootLayout({
     return match ? currentRoute : 'dashboard';
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Handlers fallback untuk pratinjau mandiri di Canvas
   const [activeProducts] = useState(INITIAL_PRODUCTS);
   const [activeCategory, setActiveCategory] = useState('SEMUA');
   const categories = useMemo(() => {
@@ -244,8 +219,8 @@ export default function RootLayout({
               <svg className="w-6 h-6 text-[#CA400A]" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
             </div>
             <div>
-              <h3 className={`font-bold text-sm md:text-base uppercase tracking-wider ${t.textTitle}`}>Katalog Produk & Resep Read-Only</h3>
-              <p className={`text-xs md:text-sm mt-1 ${t.textMuted}`}>Perubahan harga atau revisi komposisi resep wajib diserahkan kepada tim Skalar Solutions luring.</p>
+              <h3 className="font-bold text-sm md:text-base uppercase tracking-wider qios-text-title">Katalog Produk & Resep Read-Only</h3>
+              <p className="text-xs md:text-sm mt-1 qios-text-muted">Perubahan harga atau revisi komposisi resep wajib diserahkan kepada tim Skalar Solutions luring.</p>
             </div>
           </div>
 
@@ -257,7 +232,7 @@ export default function RootLayout({
                 className={`px-4 py-2.5 text-xs font-bold rounded-lg uppercase tracking-wider border transition-all ${
                   activeCategory === cat
                     ? 'bg-[#CA400A] text-white border-transparent shadow-md'
-                    : `border-gray-200 dark:border-[#242424] text-gray-500 hover:text-gray-900 dark:hover:text-white ${t.card}`
+                    : 'qios-card qios-text-muted hover:qios-text-title'
                 }`}
               >
                 {cat === 'SEMUA' ? 'Semua Menu' : cat}
@@ -267,20 +242,20 @@ export default function RootLayout({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProducts.map((p, idx) => (
-              <div key={idx} className={`rounded-xl border p-4 md:p-6 flex flex-col justify-between hover:border-[#CA400A]/20 transition-all ${t.card}`}>
+              <div key={idx} className="rounded-xl border p-4 md:p-6 flex flex-col justify-between hover:border-[#CA400A]/20 transition-all qios-card">
                 <div>
                   <div className="flex justify-between items-start mb-2">
-                    <span className={`font-black text-sm md:text-md ${t.textTitle}`}>{p.name}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-extrabold uppercase border ${t.badgeNeutral}`}>{p.category}</span>
+                    <span className="font-black text-sm md:text-md qios-text-title">{p.name}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded font-extrabold uppercase border qios-badge">{p.category}</span>
                   </div>
                   <span className="text-sm md:text-md font-bold text-[#CA400A] block mb-3">{formatRupiah(p.price)}</span>
-                  <p className={`text-xs leading-relaxed mb-4 ${t.textMuted}`}>{p.description}</p>
+                  <p className="text-xs leading-relaxed mb-4 qios-text-muted">{p.description}</p>
                 </div>
-                <div className={`pt-4 border-t space-y-2 ${t.divider}`}>
+                <div className="pt-4 border-t space-y-2 qios-divider">
                   <span className="text-[10px] font-bold text-gray-500 uppercase block">Resep Komposisi:</span>
                   <div className="flex flex-wrap gap-1.5">
                     {p.recipe.map((ing, ingIdx) => (
-                      <span key={ingIdx} className={`text-xs px-2 py-1 rounded font-semibold border ${t.badgeNeutral}`}>{ing.name}: {ing.qty} {ing.unit}</span>
+                      <span key={ingIdx} className="text-xs px-2 py-1 rounded font-semibold border qios-badge">{ing.name}: {ing.qty} {ing.unit}</span>
                     ))}
                   </div>
                 </div>
@@ -295,8 +270,8 @@ export default function RootLayout({
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-6 space-y-4">
         <div className="w-12 h-12 rounded-2xl bg-[#CA400A] flex items-center justify-center font-black text-2xl text-white">Q</div>
         <div className="space-y-1">
-          <h3 className={`font-bold text-lg ${t.textTitle}`}>Modul QIOS Owner Aktif</h3>
-          <p className={`text-sm max-w-sm mx-auto ${t.textMuted}`}>
+          <h3 className="font-bold text-lg qios-text-title">Modul QIOS Owner Aktif</h3>
+          <p className="text-sm max-w-sm mx-auto qios-text-muted">
             Gunakan sidebar di sebelah kiri untuk berpindah rute operasional. Tampilan menu dan interaksi sudah terpasang rapi di Next.js lokal Anda.
           </p>
         </div>
@@ -304,21 +279,19 @@ export default function RootLayout({
     );
   };
 
-  // Layout utama aplikasi (Tembus Mode Gelap/Terang Sempurna dengan memetakan class .dark ke root layoutContent)
-  // Sembunyikan sidebar & header saat splash screen (route "/")
   const isSplash = pathname === '/';
 
   const layoutContent = (
-    <div className={`flex flex-col md:flex-row min-h-screen w-full transition-colors duration-200 overflow-x-hidden ${t.body}`}>
+    <div className="flex flex-col md:flex-row min-h-screen w-full transition-colors duration-200 overflow-x-hidden">
 
       {/* MOBILE HEADER */}
       {!isSplash && (
-      <header className={`md:hidden flex items-center justify-between p-4 sticky top-0 z-40 w-full border-b transition-colors duration-200 ${t.sidebar}`}>
+      <header className="md:hidden flex items-center justify-between p-4 sticky top-0 z-40 w-full border-b transition-colors duration-200 qios-sidebar">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-[#CA400A] flex items-center justify-center font-black text-lg text-white shadow-md">Q</div>
           <div>
-            <span className={`font-black text-lg tracking-tight block ${t.textTitle}`}>QIOS</span>
-            <span className={`text-[9px] font-bold uppercase tracking-wider block ${t.textMuted}`}>Skalar Solutions</span>
+            <span className="font-black text-lg tracking-tight block qios-text-title">QIOS</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider block qios-text-muted">Skalar Solutions</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -346,13 +319,13 @@ export default function RootLayout({
       {!isSplash && isMobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex animate-fadeIn">
           <div className="fixed inset-0 bg-black/70" onClick={() => setIsMobileMenuOpen(false)}></div>
-          <div className={`relative w-4/5 max-w-sm h-full flex flex-col justify-between p-6 transition-colors duration-200 z-10 ${t.sidebar}`}>
+          <div className="relative w-4/5 max-w-sm h-full flex flex-col justify-between p-6 transition-colors duration-200 z-10 qios-sidebar">
             <div className="space-y-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-[#CA400A] flex items-center justify-center font-bold text-xl text-white">Q</div>
                 <div>
-                  <span className={`font-black text-xl tracking-tight block ${t.textTitle}`}>QIOS</span>
-                  <span className={`text-[10px] font-bold block uppercase tracking-wider ${t.textMuted}`}>Skalar Solutions</span>
+                  <span className="font-black text-xl tracking-tight block qios-text-title">QIOS</span>
+                  <span className="text-[10px] font-bold block uppercase tracking-wider qios-text-muted">Skalar Solutions</span>
                 </div>
               </div>
               <nav className="space-y-1">
@@ -360,7 +333,7 @@ export default function RootLayout({
                   <button
                     key={item.key}
                     onClick={() => handleNavigate(item.path)}
-                    className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-sm font-semibold transition-all ${pathname.startsWith(item.path) ? t.sidebarItemActive : t.sidebarItemHover}`}
+                    className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-sm font-semibold transition-all ${pathname.startsWith(item.path) ? 'qios-nav-active' : 'qios-nav-item'}`}
                   >
                     <div className="flex items-center gap-3">
                       {item.icon}
@@ -370,12 +343,12 @@ export default function RootLayout({
                 ))}
               </nav>
             </div>
-            <div className={`pt-4 border-t ${t.divider}`}>
+            <div className="pt-4 border-t qios-divider">
               <div className="flex items-center gap-3 truncate mb-4">
                 <div className="w-10 h-10 rounded-full bg-[#CA400A]/20 text-[#CA400A] font-bold flex items-center justify-center border border-[#CA400A]/30">OW</div>
                 <div className="truncate">
-                  <span className={`font-bold text-sm block truncate ${t.textTitle}`}>Alayavaro Rachmadia</span>
-                  <span className={`text-xs block truncate ${t.textMuted}`}>{userEmail}</span>
+                  <span className="font-bold text-sm block truncate qios-text-title">Alayavaro Rachmadia</span>
+                  <span className="text-xs block truncate qios-text-muted">{userEmail}</span>
                 </div>
               </div>
               <button onClick={() => router.push('/login')} className="w-full bg-[#CA400A] text-white text-xs font-bold py-3 px-4 rounded-lg">LOGOUT</button>
@@ -386,28 +359,28 @@ export default function RootLayout({
 
       {/* DESKTOP SIDEBAR */}
       {!isSplash && (
-      <aside className={`hidden md:flex w-64 flex-col justify-between border-r shrink-0 transition-colors duration-200 z-10 ${t.sidebar}`}>
+      <aside className="hidden md:flex w-64 flex-col justify-between border-r shrink-0 transition-colors duration-200 z-10 qios-sidebar">
         <div>
           <div className="p-6 flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-[#CA400A] flex items-center justify-center font-bold text-xl text-white shadow-lg shadow-[#CA400A]/20">Q</div>
             <div>
-              <span className={`font-extrabold text-xl tracking-tight block ${t.textTitle}`}>QIOS</span>
+              <span className="font-extrabold text-xl tracking-tight block qios-text-title">QIOS</span>
               {/* VERTICAL SMOOTH CAROUSEL */}
               <div className="relative h-[16px] overflow-hidden select-none">
-                <div 
+                <div
                   className="transition-transform duration-800"
                   style={{ transform: `translateY(-${activeIndex * 16}px)` }}
                 >
-                  <div className={`text-[10px] font-bold uppercase tracking-wider h-[16px] flex items-center ${t.textMuted}`}>Skalar Solutions</div>
-                  <div className={`text-[10px] font-bold uppercase tracking-wider h-[16px] flex items-center ${t.textMuted}`}>Kendali Bisnis Anda</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider h-[16px] flex items-center qios-text-muted">Skalar Solutions</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider h-[16px] flex items-center qios-text-muted">Kendali Bisnis Anda</div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className={`p-4 mx-4 my-1 rounded-xl relative overflow-hidden transition-colors duration-200 ${t.sidebarProfile}`}>
+          <div className="p-4 mx-4 my-1 rounded-xl relative overflow-hidden transition-colors duration-200 qios-sidebar-profile">
             <span className="text-[11px] font-bold text-gray-500 uppercase block">Merchant</span>
-            <span className={`font-bold text-md block truncate ${t.textTitle}`}>Warung Kopi Senja</span>
+            <span className="font-bold text-md block truncate qios-text-title">Warung Kopi Senja</span>
             <span className="inline-block mt-2 px-2 py-0.5 rounded text-[10px] bg-[#CA400A] text-white font-bold uppercase tracking-wider">SKALAR MAX</span>
           </div>
 
@@ -416,7 +389,7 @@ export default function RootLayout({
               <button
                 key={item.key}
                 onClick={() => handleNavigate(item.path)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${pathname.startsWith(item.path) ? t.sidebarItemActive : t.sidebarItemHover}`}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${pathname.startsWith(item.path) ? 'qios-nav-active' : 'qios-nav-item'}`}
               >
                 <div className="flex items-center gap-3">
                   {item.icon}
@@ -427,17 +400,17 @@ export default function RootLayout({
           </nav>
         </div>
 
-        <div className={`p-4 border-t flex items-center justify-between ${t.divider}`}>
+        <div className="p-4 border-t flex items-center justify-between qios-divider">
           <div className="flex items-center gap-3 truncate">
             <div className="w-10 h-10 rounded-full bg-[#CA400A]/20 text-[#CA400A] font-bold flex items-center justify-center border border-[#CA400A]/30">OW</div>
             <div className="truncate">
-              <span className={`font-bold text-sm block truncate ${t.textTitle}`}>Alayavaro Rachmadia</span>
-              <span className={`text-xs block truncate ${t.textMuted}`}>{userEmail}</span>
+              <span className="font-bold text-sm block truncate qios-text-title">Alayavaro Rachmadia</span>
+              <span className="text-xs block truncate qios-text-muted">{userEmail}</span>
             </div>
           </div>
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className={`p-2 rounded-lg border transition-all ${isDarkMode ? 'text-yellow-500 border-transparent hover:bg-[#242424]' : 'text-[#CA400A] border-transparent hover:bg-gray-100'}`}
+            className={`p-2 rounded-lg border transition-all ${isDarkMode ? 'text-yellow-500 border-transparent hover:bg-[var(--surface)]' : 'text-[#CA400A] border-transparent hover:bg-[var(--surface)]'}`}
           >
             {isDarkMode ? (
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" /></svg>
@@ -457,8 +430,8 @@ export default function RootLayout({
   );
 
   return (
-    <html lang="id" suppressHydrationWarning>
-      <body suppressHydrationWarning className={isDarkMode ? 'bg-[#0F0F0F] text-white' : 'bg-[#F4F4F6] text-[#1D1D1F]'}>
+    <html lang="id" data-theme={isDarkMode ? 'dark' : 'light'} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         {layoutContent}
       </body>
     </html>
