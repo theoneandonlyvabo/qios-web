@@ -6,7 +6,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
 import {
   LoginRole,
   loginCashier,
@@ -58,6 +57,17 @@ const animatedHeadlines = [
 
 const GOOGLE_IDENTITY_SCRIPT_ID = "google-identity-services";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+
+const OWNER_APP_URL =
+  process.env.NEXT_PUBLIC_QIOS_OWNER_URL ?? "http://localhost:3002";
+const OPERATOR_APP_URL =
+  process.env.NEXT_PUBLIC_QIOS_OPERATOR_URL ?? "http://localhost:3001";
+
+function redirectToApp(role: LoginRole, accessToken: string) {
+  const baseUrl = role === "cashier" ? OPERATOR_APP_URL : OWNER_APP_URL;
+  const hash = `#access_token=${encodeURIComponent(accessToken)}&role=${role}`;
+  window.location.href = `${baseUrl}/${hash}`;
+}
 
 const roleCopy: Record<
   LoginRole,
@@ -167,7 +177,6 @@ async function fetchGoogleProfile(accessToken: string): Promise<GoogleProfile> {
 }
 
 export function LoginPage() {
-  const router = useRouter();
   const [role, setRole] = useState<LoginRole>("owner");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -206,7 +215,7 @@ export function LoginPage() {
         if (isCancelled) return;
 
         persistSession("cashier", session);
-        router.replace("/kasir/dashboard");
+        redirectToApp("cashier", session.accessToken);
       } catch {
         if (!isCancelled) {
           setQrLoginStatus("QR aktif. Scan dari HP kasir untuk login.");
@@ -223,7 +232,7 @@ export function LoginPage() {
       isCancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isCashierQr, qrLoginCode, router]);
+  }, [isCashierQr, qrLoginCode]);
 
   const canSubmit = useMemo(() => {
     if (isLoading || isGoogleLoading) return false;
@@ -270,7 +279,7 @@ export function LoginPage() {
           });
 
       persistSession(role, session);
-      router.replace(isCashier ? "/kasir/dashboard" : "/dashboard");
+      redirectToApp(role, session.accessToken);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -343,7 +352,7 @@ export function LoginPage() {
       });
 
       persistSession("owner", session);
-      router.replace("/dashboard");
+      redirectToApp("owner", session.accessToken);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error

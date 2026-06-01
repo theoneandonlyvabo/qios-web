@@ -13,7 +13,7 @@ PG_USER := postgres
 PG_PASSWORD := postgres
 PG_DB := qios
 
-.PHONY: help dev server api client entry operator owner install install-client lint fmt gofmt vet db db-stop db-rm db-reset db-logs db-psql
+.PHONY: help dev server api client entry operator owner install install-client lint fmt gofmt vet db db-stop db-rm db-reset db-logs db-psql seed-dev
 
 help:
 	@printf "\nUsage:\n"
@@ -28,6 +28,7 @@ help:
 	@printf "  make lint         Run client lint and Go vet\n"
 	@printf "  make vet          Run Go vet on the API server\n"
 	@printf "  make fmt          Format Go sources\n"
+	@printf "  make seed-dev     Seed dev owner+business+operator (prints login credentials)\n"
 	@printf "  make db           Start local Postgres in Docker (creates container if missing)\n"
 	@printf "  make db-stop      Stop the Postgres container\n"
 	@printf "  make db-rm        Stop and remove the Postgres container (keeps volume)\n"
@@ -44,7 +45,12 @@ dev:
 server: api
 
 api:
-	cd $(SERVER_API) && $(GO) run ./cmd/...
+	cd $(SERVER_API) && $(GO) run ./cmd
+
+# Seed dev owner + business + operator with known credentials.
+# Idempotent — safe to re-run.
+seed-dev:
+	cd $(SERVER_API) && $(GO) run ./cmd/seed-dev
 
 client:
 	npx concurrently --names "entry,operator,owner" --prefix-colors "yellow,magenta,green" \
