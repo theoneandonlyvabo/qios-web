@@ -1,6 +1,6 @@
 import type { PaymentMethod } from "@/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const API_URL = process.env.NEXT_PUBLIC_QIOS_API_URL ?? "http://localhost:8080";
 
 type ApiResponse<T> = {
   success: boolean;
@@ -29,14 +29,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const operatorApi = {
   loginQr(qrToken: string) {
-    return request<{ access_token: string }>("/operator/auth/login/qr", {
+    return request<{ access_token: string }>("/kasir/auth/login/qr", {
       method: "POST",
       body: JSON.stringify({ qr_token: qrToken })
     });
   },
 
   loginCredential(body: { business_id: string; operator_code: string; password: string }) {
-    return request<{ access_token: string }>("/operator/auth/login", {
+    return request<{ access_token: string }>("/kasir/auth/login", {
       method: "POST",
       body: JSON.stringify(body)
     });
@@ -61,7 +61,7 @@ export const operatorApi = {
   },
 
   todayTransactions() {
-    return request<unknown>("/operator/transactions/today");
+    return request<unknown>("/transactions");
   },
 
   voidOrder(orderId: string, voidReason: string) {
@@ -73,7 +73,7 @@ export const operatorApi = {
 };
 
 export function loginWithQR(qr_token: string) {
-  return request<{ access_token: string }>("/operator/auth/login/qr", {
+  return request<{ access_token: string }>("/kasir/auth/login/qr", {
     method: "POST",
     body: JSON.stringify({ qr_token })
   });
@@ -84,7 +84,7 @@ export function loginWithCredential(body: {
   operator_code: string;
   password: string;
 }) {
-  return request<{ access_token: string }>("/operator/auth/login", {
+  return request<{ access_token: string }>("/kasir/auth/login", {
     method: "POST",
     body: JSON.stringify(body)
   });

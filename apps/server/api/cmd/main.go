@@ -33,6 +33,19 @@ type echoValidator struct {
 	validate *validator.Validate
 }
 
+func cookieSameSite(s string) http.SameSite {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "lax":
+		return http.SameSiteLaxMode
+	case "none":
+		return http.SameSiteNoneMode
+	case "strict":
+		return http.SameSiteStrictMode
+	default:
+		return http.SameSiteDefaultMode
+	}
+}
+
 func (cev *echoValidator) Validate(input any) error {
 	return cev.validate.Struct(input)
 }
@@ -130,7 +143,11 @@ func main() {
 
 	authRepo := auth.NewPostgresRepository(db)
 	authSvc := auth.NewService(authRepo, jwtSvc)
-	auth.RegisterRoutes(e, auth.NewHandler(authSvc))
+	auth.RegisterRoutes(e, auth.NewHandler(authSvc, auth.CookieConfig{
+		Secure:   cfg.CookieSecure,
+		SameSite: cookieSameSite(cfg.CookieSameSite),
+		Domain:   cfg.CookieDomain,
+	}))
 
 	userRepo := user.NewPostgresRepository(db)
 	userPlan := user.NewPostgresPlanLookup(db)

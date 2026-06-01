@@ -1,0 +1,131 @@
+/* Skalar Design System tokens — synced from apps/client/tokens.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+:root,
+[data-theme="light"] {
+  --tomato: #CA400A;
+  --tomato-10: rgba(202,64,10,0.08);
+  --tomato-20: rgba(202,64,10,0.16);
+  --charcoal: #1A1A1A;
+  --ink: #2C2C2A;
+  --body: #4A4A47;
+  --muted: #888780;
+  --border: #E2E0DC;
+  --surface: #F7F6F3;
+  --page: #FDFCFA;
+  --white: #FFFFFF;
+}
+
+[data-theme="dark"] {
+  --tomato: #CA400A;
+  --tomato-10: rgba(202,64,10,0.10);
+  --tomato-20: rgba(202,64,10,0.20);
+  --charcoal: #EDEAE4;
+  --ink: #D4D1CB;
+  --body: #A8A5A0;
+  --muted: #6B6960;
+  --border: #2C2A28;
+  --surface: #1A1918;
+  --page: #111110;
+  --white: #242220;
+}
+
+@import "tailwindcss";
+
+@variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --color-tomato: var(--tomato);
+  --color-charcoal: var(--charcoal);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-sk-border: var(--border);
+  --color-surface: var(--surface);
+  --color-page: var(--page);
+  --color-sk-white: var(--white);
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--page);
+  color: var(--ink);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+/* Layout component tokens — replaces the useMemo t-object in layout.tsx */
+.qios-card {
+  background-color: var(--surface);
+  border-color: var(--border);
+}
+
+[data-theme="light"] .qios-card {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.qios-sidebar {
+  background-color: var(--surface);
+  border-color: var(--border);
+}
+
+.qios-sidebar-profile {
+  background-color: var(--page);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .qios-sidebar-profile {
+  background-color: var(--surface);
+}
+
+.qios-nav-active {
+  background-color: var(--white);
+  color: var(--tomato);
+  border-left: 4px solid var(--tomato);
+}
+
+[data-theme="dark"] .qios-nav-active {
+  background-color: var(--surface);
+}
+
+.qios-nav-item {
+  color: var(--muted);
+}
+
+.qios-nav-item:hover {
+  color: var(--charcoal);
+  background-color: var(--surface);
+}
+
+.qios-text-title {
+  color: var(--charcoal);
+}
+
+.qios-text-sub {
+  color: var(--body);
+}
+
+.qios-text-muted {
+  color: var(--muted);
+}
+
+.qios-divider {
+  border-color: var(--border);
+}
+
+.qios-badge {
+  background-color: var(--surface);
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

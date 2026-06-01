@@ -30,12 +30,20 @@ import (
 
 const refreshTokenCookieName = "refresh_token"
 
-type Handler struct {
-	service Service
+// CookieConfig holds env-driven cookie flags for the refresh token.
+type CookieConfig struct {
+	Secure   bool
+	SameSite http.SameSite
+	Domain   string
 }
 
-func NewHandler(service Service) *Handler {
-	return &Handler{service: service}
+type Handler struct {
+	service   Service
+	cookieCfg CookieConfig
+}
+
+func NewHandler(service Service, cookieCfg CookieConfig) *Handler {
+	return &Handler{service: service, cookieCfg: cookieCfg}
 }
 
 // ----------------------------------------------------------------
@@ -51,27 +59,27 @@ type loginRequest struct {
 // Cookie helpers
 // ----------------------------------------------------------------
 
-// setRefreshCookie menempel refresh token ke browser via httpOnly cookie.
-func setRefreshCookie(c echo.Context, plain string, expiry time.Duration) {
+func (h *Handler) setRefreshCookie(c echo.Context, plain string, expiry time.Duration) {
 	c.SetCookie(&http.Cookie{
 		Name:     refreshTokenCookieName,
 		Value:    plain,
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   h.cookieCfg.Secure,
+		SameSite: h.cookieCfg.SameSite,
+		Domain:   h.cookieCfg.Domain,
 		Expires:  time.Now().Add(expiry),
 		Path:     "/",
 	})
 }
 
-// clearRefreshCookie menghapus cookie refresh token dari browser.
-func clearRefreshCookie(c echo.Context) {
+func (h *Handler) clearRefreshCookie(c echo.Context) {
 	c.SetCookie(&http.Cookie{
 		Name:     refreshTokenCookieName,
 		Value:    "",
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   h.cookieCfg.Secure,
+		SameSite: h.cookieCfg.SameSite,
+		Domain:   h.cookieCfg.Domain,
 		Expires:  time.Unix(0, 0),
 		Path:     "/",
 	})
@@ -97,7 +105,7 @@ func (h *Handler) Login(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	setRefreshCookie(c, out.RefreshToken, out.RefreshExpiry)
+	h.setRefreshCookie(c, out.RefreshToken, out.RefreshExpiry)
 	return response.OK(c, map[string]string{"access_token": out.AccessToken})
 }
 
@@ -120,12 +128,12 @@ func (h *Handler) Refresh(c echo.Context) error {
 	out, err := h.service.Refresh(c.Request().Context(), cookie.Value)
 	if err != nil {
 		if errors.Is(err, ErrSessionExpired) {
-			clearRefreshCookie(c)
+			h.clearRefreshCookie(c)
 		}
 		return mapServiceError(c, err)
 	}
 
-	setRefreshCookie(c, out.RefreshToken, out.RefreshExpiry)
+	h.setRefreshCookie(c, out.RefreshToken, out.RefreshExpiry)
 	return response.OK(c, map[string]string{"access_token": out.AccessToken})
 }
 
@@ -140,7 +148,7 @@ func (h *Handler) Logout(c echo.Context) error {
 
 	// Service idempotent — error di DB tidak boleh menghalangi clear cookie.
 	_ = h.service.Logout(c.Request().Context(), cookie.Value)
-	clearRefreshCookie(c)
+	h.clearRefreshCookie(c)
 	return response.NoContent(c)
 }
 

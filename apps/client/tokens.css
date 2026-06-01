@@ -1,0 +1,33 @@
+/* Skalar Design System — PT Skalar Solusi Digital */
+/* Single source of truth. Import this before tailwindcss in every app. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+:root,
+[data-theme="light"] {
+  --tomato: #CA400A;
+  --tomato-10: rgba(202,64,10,0.08);
+  --tomato-20: rgba(202,64,10,0.16);
+  --charcoal: #1A1A1A;
+  --ink: #2C2C2A;
+  --body: #4A4A47;
+  --muted: #888780;
+  --border: #E2E0DC;
+  --surface: #F7F6F3;
+  --page: #FDFCFA;
+  --white: #FFFFFF;
+}
+
+[data-theme="dark"] {
+  --tomato: #CA400A;
+  --tomato-10: rgba(202,64,10,0.10);
+  --tomato-20: rgba(202,64,10,0.20);
+  --charcoal: #EDEAE4;
+  --ink: #D4D1CB;
+  --body: #A8A5A0;
+  --muted: #6B6960;
+  --border: #2C2A28;
+  --surface: #1A1918;
+  --page: #111110;
+  --white: #242220;
+}

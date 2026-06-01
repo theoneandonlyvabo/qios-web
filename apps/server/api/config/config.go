@@ -30,6 +30,14 @@ type Config struct {
 	AdminAPIKey string
 
 	CORSAllowedOrigins string
+
+	// Cookie flags — env-driven so dev and prod differ cleanly.
+	// Dev: COOKIE_SECURE=false, COOKIE_SAMESITE=lax
+	// Prod (same parent domain): COOKIE_SECURE=true, COOKIE_SAMESITE=lax, COOKIE_DOMAIN=.example.com
+	// Prod (cross-site): COOKIE_SECURE=true, COOKIE_SAMESITE=none (requires CSRF protection)
+	CookieSecure   bool
+	CookieSameSite string // "lax" | "strict" | "none"
+	CookieDomain   string // empty = no Domain attribute
 }
 
 func Load() *Config {
@@ -58,6 +66,10 @@ func Load() *Config {
 		AdminAPIKey: getEnv("ADMIN_API_KEY", ""),
 
 		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
+
+		CookieSecure:   getEnvBool("COOKIE_SECURE", true),
+		CookieSameSite: getEnv("COOKIE_SAMESITE", "strict"),
+		CookieDomain:   getEnv("COOKIE_DOMAIN", ""),
 	}
 }
 
@@ -97,4 +109,16 @@ func getEnvInt(key string, defaultVal int) int {
 		return defaultVal
 	}
 	return n
+}
+
+func getEnvBool(key string, defaultVal bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return defaultVal
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return defaultVal
+	}
+	return b
 }
